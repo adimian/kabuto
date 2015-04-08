@@ -37,6 +37,12 @@ class Login(restful.Resource):
         return {'login': 'success'}
 
 
+
+class Job(restful.Resource):
+    def get(self, job_id):
+        pass
+
+
 class HelloWorld(restful.Resource):
     @login_required
     def get(self):
