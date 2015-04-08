@@ -1,0 +1,7 @@
+Login
+-----
+$ curl http://127.0.0.1:5000/login -X POST -d "login=me&password=SecreT" -c /tmp/cookies.txt
+
+Subsequent queries
+------------------
+$ curl -b /tmp/cookies.txt  http://127.0.0.1:5000/
