@@ -103,8 +103,15 @@ class HelloWorld(ProtectedResource):
 
 api.add_resource(HelloWorld, '/')
 api.add_resource(Login, '/login')
-api.add_resource(Images, '/image')
-api.add_resource(Pipelines, '/pipeline')
+api.add_resource(Images,
+                 '/image',
+                 '/image/<string:image_id>')
+api.add_resource(Pipelines,
+                 '/pipeline',
+                 '/pipeline/<string:pipeline_id>')
+api.add_resource(Jobs,
+                 '/pipeline/<string:pipeline_id>/job',
+                 '/pipeline/<string:pipeline_id>/job/<string:job_id>')
 
 if __name__ == '__main__':
     app.config['SECRET_KEY'] = 'haha'
