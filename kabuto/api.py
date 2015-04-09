@@ -5,6 +5,7 @@ from flask_login import LoginManager, login_required, login_user
 import subprocess
 import tempfile
 import uuid
+import json
 
 
 class ProtectedResource(restful.Resource):
@@ -17,12 +18,20 @@ login_manager = LoginManager(app)
 
 
 class Job(object):
-    def __init__(self, uid, pipeline, image, attachments, command):
+    def __init__(self, uid, image, attachments, command):
         self.uid = uid
-        self.pipeline = pipeline
         self.image = image
         self.attachments = attachments
         self.command = command
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
+class Execution(object):
+    def __init__(self, uid, job):
+        self.uid = uid
+        self.job = job
 
 
 class User(object):
@@ -43,6 +52,7 @@ def load_user(username):
 
 # TODO: plug to a database
 PIPELINES = {}
+EXECUTION_QUEUE = []
 
 
 class Login(restful.Resource):
@@ -82,7 +92,17 @@ class Images(ProtectedResource):
 
 
 class Pipelines(ProtectedResource):
+    def get(self):
+        global PIPELINES
+        res = []
+        for pipeline_id, details in PIPELINES.iteritems():
+            res.append({'id': pipeline_id,
+                        'name': details['name'],
+                        'jobs': len(details['jobs'])})
+        return res
+
     def post(self):
+        global PIPELINES
         parser = reqparse.RequestParser()
         parser.add_argument('name', type=unicode)
         args = parser.parse_args()
@@ -95,6 +115,8 @@ class Pipelines(ProtectedResource):
 
 class Jobs(ProtectedResource):
     def post(self, pipeline_id):
+        global PIPELINES
+
         parser = reqparse.RequestParser()
         parser.add_argument('image_id', type=unicode)
         parser.add_argument('command', type=unicode)
@@ -102,17 +124,27 @@ class Jobs(ProtectedResource):
 #         parser.add_argument('attachments', type=file)
         args = parser.parse_args()
 
-        print args
         pipeline = PIPELINES[pipeline_id]
         uid = str(uuid.uuid4())
 
-        job = Job(uid, pipeline, args['image_id'], None, args['command'])
+        job = Job(uid, args['image_id'], [], args['command'])
 
         pipeline['jobs'].append(job)
 
-        print pipeline
-
         return {'id': uid}
+
+
+class Submitter(ProtectedResource):
+    def post(self, pipeline_id):
+        global PIPELINES
+        pipeline = PIPELINES[pipeline_id]
+        jobs = pipeline['jobs']
+        status = {}
+        for job in jobs:
+            uid = str(uuid.uuid4())
+            EXECUTION_QUEUE.append(Execution(uid, job))
+            status[uid] = job.uid
+        return status
 
 
 class HelloWorld(ProtectedResource):
@@ -130,6 +162,8 @@ api.add_resource(Pipelines,
 api.add_resource(Jobs,
                  '/pipeline/<string:pipeline_id>/job',
                  '/pipeline/<string:pipeline_id>/job/<string:job_id>')
+api.add_resource(Submitter,
+                 '/pipeline/<string:pipeline_id>/submit',)
 
 if __name__ == '__main__':
     app.config['SECRET_KEY'] = 'haha'
