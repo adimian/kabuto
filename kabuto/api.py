@@ -17,7 +17,8 @@ login_manager = LoginManager(app)
 
 
 class Job(object):
-    def __init__(self, pipeline, image, attachments, command):
+    def __init__(self, uid, pipeline, image, attachments, command):
+        self.uid = uid
         self.pipeline = pipeline
         self.image = image
         self.attachments = attachments
@@ -76,7 +77,7 @@ class Images(ProtectedResource):
                             stdin=dockerfile)
             # TODO: (security) do not use shell with constructed args (grep)
             command = "docker images --no-trunc | grep %s | awk '{print $3}'" % name
-            image_id = subprocess.check_output(command, shell=True)
+            image_id = subprocess.check_output(command, shell=True).strip()
             return {'id': image_id}
 
 
@@ -94,7 +95,24 @@ class Pipelines(ProtectedResource):
 
 class Jobs(ProtectedResource):
     def post(self, pipeline_id):
-        pass
+        parser = reqparse.RequestParser()
+        parser.add_argument('image_id', type=unicode)
+        parser.add_argument('command', type=unicode)
+        # TODO: handle upload
+#         parser.add_argument('attachments', type=file)
+        args = parser.parse_args()
+
+        print args
+        pipeline = PIPELINES[pipeline_id]
+        uid = str(uuid.uuid4())
+
+        job = Job(uid, pipeline, args['image_id'], None, args['command'])
+
+        pipeline['jobs'].append(job)
+
+        print pipeline
+
+        return {'id': uid}
 
 
 class HelloWorld(ProtectedResource):
