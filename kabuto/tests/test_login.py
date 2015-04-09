@@ -8,7 +8,17 @@ def client():
     client = app.test_client()
     return client
 
+
 def test_login(client):
+    # not yet logged in
+    rv = client.get('/')
+    assert rv.status_code == 401
+
+    # logging in
     rv = client.post('/login', data={'username': 'me',
                                      'password': 'Secret'})
-    print rv.data
+    assert rv.status_code == 200
+
+    # logged in, yay
+    rv = client.get('/')
+    assert rv.status_code == 200
