@@ -4,6 +4,11 @@ from flask_restful import reqparse
 from flask_login import LoginManager, login_required, login_user
 import subprocess
 import tempfile
+import uuid
+
+
+class ProtectedResource(restful.Resource):
+    method_decorators = [login_required]
 
 
 app = Flask(__name__)
@@ -27,6 +32,10 @@ def load_user(username):
     return User()
 
 
+# TODO: plug to a database
+PIPELINES = {}
+
+
 class Login(restful.Resource):
     def post(self):
         parser = reqparse.RequestParser()
@@ -39,7 +48,7 @@ class Login(restful.Resource):
         return {'login': 'success'}
 
 
-class Image(restful.Resource):
+class Image(ProtectedResource):
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('dockerfile', type=unicode)
@@ -63,14 +72,25 @@ class Image(restful.Resource):
             return {'id': image_id}
 
 
-class HelloWorld(restful.Resource):
-    @login_required
+class Pipeline(ProtectedResource):
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('name', type=unicode)
+        args = parser.parse_args()
+        name = args['name']
+        uid = str(uuid.uuid4())
+        PIPELINES[uid] = name
+        return {'id': uid}
+
+
+class HelloWorld(ProtectedResource):
     def get(self):
         return {'hello': 'world'}
 
 api.add_resource(HelloWorld, '/')
 api.add_resource(Login, '/login')
 api.add_resource(Image, '/image')
+api.add_resource(Pipeline, '/pipeline')
 
 if __name__ == '__main__':
     app.config['SECRET_KEY'] = 'haha'
