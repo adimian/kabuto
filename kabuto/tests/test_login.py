@@ -1,5 +1,6 @@
 from kabuto.api import app
 import pytest
+import json
 
 
 @pytest.fixture
@@ -33,7 +34,10 @@ def test_login(client):
 
 def test_create_image(authenticated_client):
     dockerfile = '''FROM busybox
-    RUN echo "hello world"
+    CMD ["echo", "hello world"]
     '''
-    rv = authenticated_client.post('/image', data={'dockerfile': dockerfile})
+    rv = authenticated_client.post('/image', data={'dockerfile': dockerfile,
+                                                   'name': 'hellozeworld'})
     assert rv.status_code == 200
+    image_id = json.loads(rv.data)['id']
+    assert image_id is not None

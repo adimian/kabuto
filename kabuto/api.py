@@ -43,15 +43,24 @@ class Image(restful.Resource):
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('dockerfile', type=unicode)
+        parser.add_argument('name', type=unicode)
 
         args = parser.parse_args()
         content = args['dockerfile']
 
+        name = args['name']
+
+        # TODO: async
         with tempfile.NamedTemporaryFile('w') as dockerfile:
             dockerfile.write(content)
             dockerfile.flush()
             dockerfile.seek(0)
-            subprocess.call(['docker', 'build', '-'], stdin=dockerfile)
+            subprocess.call(['docker', 'build', '-t', name, '-'],
+                            stdin=dockerfile)
+            # TODO: (security) do not use shell with constructed args (grep)
+            command = "docker images --no-trunc | grep %s | awk '{print $3}'" % name
+            image_id = subprocess.check_output(command, shell=True)
+            return {'id': image_id}
 
 
 class HelloWorld(restful.Resource):
