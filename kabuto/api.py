@@ -16,6 +16,14 @@ api = restful.Api(app)
 login_manager = LoginManager(app)
 
 
+class Job(object):
+    def __init__(self, pipeline, image, attachments, command):
+        self.pipeline = pipeline
+        self.image = image
+        self.attachments = attachments
+        self.command = command
+
+
 class User(object):
     def is_active(self):
         return True
@@ -48,7 +56,7 @@ class Login(restful.Resource):
         return {'login': 'success'}
 
 
-class Image(ProtectedResource):
+class Images(ProtectedResource):
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('dockerfile', type=unicode)
@@ -72,15 +80,21 @@ class Image(ProtectedResource):
             return {'id': image_id}
 
 
-class Pipeline(ProtectedResource):
+class Pipelines(ProtectedResource):
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('name', type=unicode)
         args = parser.parse_args()
         name = args['name']
         uid = str(uuid.uuid4())
-        PIPELINES[uid] = name
+        PIPELINES[uid] = {'name': name,
+                          'jobs': []}
         return {'id': uid}
+
+
+class Jobs(ProtectedResource):
+    def post(self, pipeline_id):
+        pass
 
 
 class HelloWorld(ProtectedResource):
@@ -89,8 +103,8 @@ class HelloWorld(ProtectedResource):
 
 api.add_resource(HelloWorld, '/')
 api.add_resource(Login, '/login')
-api.add_resource(Image, '/image')
-api.add_resource(Pipeline, '/pipeline')
+api.add_resource(Images, '/image')
+api.add_resource(Pipelines, '/pipeline')
 
 if __name__ == '__main__':
     app.config['SECRET_KEY'] = 'haha'
