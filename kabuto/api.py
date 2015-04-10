@@ -5,7 +5,6 @@ from flask_login import LoginManager, login_required, login_user
 import subprocess
 import tempfile
 import uuid
-import json
 
 
 class ProtectedResource(restful.Resource):
