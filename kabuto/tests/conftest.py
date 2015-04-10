@@ -4,21 +4,21 @@ from kabuto.tests import sample_dockerfile
 import json
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def client():
     app.config['SECRET_KEY'] = 'haha'
     client = app.test_client()
     return client
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def authenticated_client(client):
-    client.post('/login', data={'username': 'me',
+    client.post('/login', data={'login': 'me',
                                 'password': 'Secret'})
     return client
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def preloaded_client(authenticated_client):
     rv = authenticated_client.post('/image',
                                    data={'dockerfile': sample_dockerfile,

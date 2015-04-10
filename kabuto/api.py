@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, abort
 import flask_restful as restful
 from flask_restful import reqparse
 from flask_login import LoginManager, login_required, login_user
@@ -60,11 +60,14 @@ class Login(restful.Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('login', type=unicode)
         parser.add_argument('password', type=unicode)
-
         args = parser.parse_args()
-        user = load_user(args['login'])
-        login_user(user)
-        return {'login': 'success'}
+
+        if args['login'] and args['password']:
+            user = load_user(args['login'])
+            login_user(user)
+            return {'login': 'success'}
+
+        abort(401)
 
 
 class Images(ProtectedResource):
