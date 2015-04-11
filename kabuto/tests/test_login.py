@@ -20,4 +20,4 @@ def test_empty_login(client):
 
     # logging in
     rv = client.post('/login', data={})
-    assert rv.status_code == 401
+    assert rv.status_code == 400

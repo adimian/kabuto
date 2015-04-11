@@ -1,0 +1,20 @@
+---
+- hosts: all
+  sudo: True
+  tasks:
+  
+    - name: install deps
+      apt: name={{item}}
+      with_items:
+        - python-pip
+        - python-dev
+        - libffi-dev
+  
+    - name: install docker
+      shell: wget -qO- https://get.docker.com/ | sh
+      
+    - name: add user in docker group
+      user: name={{ansible_ssh_user}} groups=docker append=yes
+      
+    - name: install pip deps
+      command: pip install -r /vagrant/requirements.txt

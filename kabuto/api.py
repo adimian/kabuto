@@ -2,9 +2,17 @@ from flask import Flask, abort
 import flask_restful as restful
 from flask_restful import reqparse
 from flask_login import LoginManager, login_required, login_user
-import subprocess
+from flask_sqlalchemy import SQLAlchemy
+import os
 import tempfile
 import uuid
+from sqlalchemy.ext.hybrid import hybrid_property
+from flask_bcrypt import Bcrypt
+from sqlalchemy.orm.exc import NoResultFound
+import datetime
+import docker
+import re
+import json
 
 
 class ProtectedResource(restful.Resource):
@@ -14,9 +22,65 @@ class ProtectedResource(restful.Resource):
 app = Flask(__name__)
 api = restful.Api(app)
 login_manager = LoginManager(app)
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
 
 
-class Job(object):
+def get_docker_client():
+    client = docker.Client(base_url=app.config['DOCKER_CLIENT'])
+    return client
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    login = db.Column(db.String(64), unique=True)
+    _password = db.Column(db.String(128))
+    source = db.Column(db.String(32))  # internal/LDAP/...
+    active = db.Column(db.Boolean, default=False)
+
+    def __init__(self, login):
+        self.login = login
+
+    @hybrid_property
+    def password(self):
+        return self._password
+
+    @password.setter
+    def _set_password(self, plaintext):
+        self._password = bcrypt.generate_password_hash(plaintext)
+
+    def is_correct_password(self, plaintext):
+        if bcrypt.check_password_hash(self._password, plaintext):
+            return True
+        return False
+
+    def is_active(self):
+        return True
+
+    def is_authenticated(self):
+        return True
+
+    def get_id(self):
+        return self.id
+
+
+class Image(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    docker_id = db.Column(db.String(64), unique=True)
+    dockerfile = db.Column(db.Text)
+
+    creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
+
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    owner = db.relationship('User',
+                            backref=db.backref('images', lazy='dynamic'))
+
+
+class Job(db.Model):
+
+    id = db.Column(db.Integer, primary_key=True)
+    image = db.Column(db.Integer)
+
     def __init__(self, uid, image, attachments, command):
         self.uid = uid
         self.image = image
@@ -33,20 +97,15 @@ class Execution(object):
         self.job = job
 
 
-class User(object):
-    def is_active(self):
-        return True
-
-    def is_authenticated(self):
-        return True
-
-    def get_id(self):
-        return 'test'
-
-
 @login_manager.user_loader
 def load_user(username):
-    return User()
+    try:
+        user = User.query.filter_by(login=username).one()
+    except NoResultFound:
+        user = User(login=username)
+        db.session.add(user)
+        db.session.commit()
+    return user
 
 
 # TODO: plug to a database
@@ -57,8 +116,8 @@ EXECUTION_QUEUE = []
 class Login(restful.Resource):
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('login', type=unicode)
-        parser.add_argument('password', type=unicode)
+        parser.add_argument('login', type=unicode, required=True)
+        parser.add_argument('password', type=unicode, required=True)
         args = parser.parse_args()
 
         if args['login'] and args['password']:
@@ -72,25 +131,34 @@ class Login(restful.Resource):
 class Images(ProtectedResource):
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('dockerfile', type=unicode)
-        parser.add_argument('name', type=unicode)
+        parser.add_argument('dockerfile', type=unicode, required=True)
+        parser.add_argument('name', type=unicode, required=True)
 
         args = parser.parse_args()
         content = args['dockerfile']
 
         name = args['name']
 
+        client = get_docker_client()
+
         # TODO: async
-        with tempfile.NamedTemporaryFile('w') as dockerfile:
-            dockerfile.write(content)
-            dockerfile.flush()
-            dockerfile.seek(0)
-            subprocess.call(['docker', 'build', '-t', name, '-'],
-                            stdin=dockerfile)
-            # TODO: (security) do not use shell with constructed args (grep)
-            command = "docker images --no-trunc | grep %s | awk '{print $3}'" % name
-            image_id = subprocess.check_output(command, shell=True).strip()
-            return {'id': image_id}
+
+        fd, filename = tempfile.mkstemp()
+        os.close(fd)
+
+        with open(filename, 'w') as f:
+            f.write(content)
+
+        with open(filename, 'r') as dockerfile:
+            output = client.build(tag=name, fileobj=dockerfile)
+
+        last_line = list(output)[-1]
+        last_stream = json.loads(last_line)['stream'].strip()
+        image_id = re.search(pattern='Successfully built ([a-z0-9]+)',
+                             string=last_stream).groups()[0]
+
+        os.remove(filename)
+        return {'id': image_id}
 
 
 class Pipelines(ProtectedResource):
@@ -168,5 +236,10 @@ api.add_resource(Submitter,
                  '/pipeline/<string:pipeline_id>/submit',)
 
 if __name__ == '__main__':
+    app.config['DOCKER_CLIENT'] = 'unix://var/run/docker.sock'
+    app.config['BCRYPT_LOG_ROUNDS'] = 12
     app.config['SECRET_KEY'] = 'haha'
-    app.run(debug=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+
+    db.create_all()
+    app.run(host='0.0.0.0', port=5000, debug=True)
