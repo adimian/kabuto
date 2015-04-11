@@ -37,6 +37,7 @@ class User(db.Model):
     _password = db.Column(db.String(128))
     source = db.Column(db.String(32))  # internal/LDAP/...
     active = db.Column(db.Boolean, default=False)
+    email = db.Column(db.String(256), unique=True)
 
     def __init__(self, login):
         self.login = login
@@ -83,19 +84,39 @@ class Image(db.Model):
         self.owner = owner
 
 
-class Job(db.Model):
-
+class Pipeline(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    image = db.Column(db.Integer)
+    name = db.Column(db.String(128))
+    creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
+
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    owner = db.relationship('User',
+                            backref=db.backref('pipelines', lazy='dynamic'))
+
+    def __init__(self, name, owner):
+        self.name = name
+        self.owner = owner
+
+
+class Job(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    image_id = db.Column(db.Integer, db.ForeignKey('image.id'))
+    image = db.relationship('Image',
+                            backref=db.backref('jobs', lazy='dynamic'))
+
+    pipeline_id = db.Column(db.Integer, db.ForeignKey('pipeline.id'))
+    pipeline = db.relationship('Pipeline',
+                               backref=db.backref('jobs', lazy='dynamic'))
+
+    used_cpu = db.Column(db.Float(precision=2), default=0.)
+    used_memory = db.Column(db.Float(precision=2), default=0.)
+    used_io = db.Column(db.Float(precision=2), default=0.)
 
     def __init__(self, uid, image, attachments, command):
         self.uid = uid
         self.image = image
         self.attachments = attachments
         self.command = command
-
-    def __repr__(self):
-        return str(self.__dict__)
 
 
 class Execution(object):
@@ -174,24 +195,21 @@ class Images(ProtectedResource):
 
 class Pipelines(ProtectedResource):
     def get(self):
-        global PIPELINES
-        res = []
-        for pipeline_id, details in PIPELINES.iteritems():
-            res.append({'id': pipeline_id,
-                        'name': details['name'],
-                        'jobs': len(details['jobs'])})
-        return res
+        pipelines = Pipeline.query.filter_by(owner=current_user).all()
+        return dict([(p.id, p.name) for p in pipelines])
 
     def post(self):
-        global PIPELINES
         parser = reqparse.RequestParser()
-        parser.add_argument('name', type=unicode)
+        parser.add_argument('name', type=unicode, required=True)
         args = parser.parse_args()
         name = args['name']
-        uid = str(uuid.uuid4())
-        PIPELINES[uid] = {'name': name,
-                          'jobs': []}
-        return {'id': uid}
+
+        pipeline = Pipeline(name, current_user)
+
+        db.session.add(pipeline)
+        db.session.commit()
+
+        return {'id': pipeline.id}
 
 
 class Jobs(ProtectedResource):
