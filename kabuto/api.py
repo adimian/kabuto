@@ -112,16 +112,22 @@ class Job(db.Model):
     used_memory = db.Column(db.Float(precision=2), default=0.)
     used_io = db.Column(db.Float(precision=2), default=0.)
 
-    def __init__(self, uid, image, attachments, command):
-        self.uid = uid
+    def __init__(self, pipeline, image, attachments, command):
+        self.pipeline = pipeline
         self.image = image
         self.attachments = attachments
         self.command = command
 
 
-class Execution(object):
-    def __init__(self, uid, job):
-        self.uid = uid
+class Execution(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
+    job = db.relationship('Job',
+                          backref=db.backref('executions', lazy='dynamic'))
+    state = db.Column(db.String(32), default='ready')
+    creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
+
+    def __init__(self, job):
         self.job = job
 
 
@@ -134,11 +140,6 @@ def load_user(username):
         db.session.add(user)
         db.session.commit()
     return user
-
-
-# TODO: plug to a database
-PIPELINES = {}
-EXECUTION_QUEUE = []
 
 
 class Login(restful.Resource):
@@ -214,8 +215,6 @@ class Pipelines(ProtectedResource):
 
 class Jobs(ProtectedResource):
     def post(self, pipeline_id):
-        global PIPELINES
-
         parser = reqparse.RequestParser()
         parser.add_argument('image_id', type=unicode)
         parser.add_argument('command', type=unicode)
@@ -223,27 +222,27 @@ class Jobs(ProtectedResource):
 #         parser.add_argument('attachments', type=file)
         args = parser.parse_args()
 
-        pipeline = PIPELINES[pipeline_id]
-        uid = str(uuid.uuid4())
+        pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
+        image = Image.query.filter_by(id=args['image_id']).one()
 
-        job = Job(uid, args['image_id'], [], args['command'])
+        job = Job(pipeline, image, [], args['command'])
 
-        pipeline['jobs'].append(job)
+        db.session.add(job)
+        db.session.commit()
 
-        return {'id': uid}
+        return {'id': job.id}
 
 
 class Submitter(ProtectedResource):
     def post(self, pipeline_id):
-        global PIPELINES
-        pipeline = PIPELINES[pipeline_id]
-        jobs = pipeline['jobs']
-        status = {}
-        for job in jobs:
-            uid = str(uuid.uuid4())
-            EXECUTION_QUEUE.append(Execution(uid, job))
-            status[uid] = job.uid
-        return status
+        pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
+        execs = []
+        for job in pipeline.jobs:
+            ex = Execution(job)
+            db.session.add(ex)
+            execs.append(ex)
+        db.session.commit()
+        return dict([(ex.id, ex.state) for ex in execs])
 
 
 class HelloWorld(ProtectedResource):

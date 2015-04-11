@@ -8,6 +8,7 @@ import json
 def client():
     app.config['DOCKER_CLIENT'] = 'unix://var/run/docker.sock'
     app.config['SECRET_KEY'] = 'haha'
+    app.config['DEBUG'] = True
     app.config['BCRYPT_LOG_ROUNDS'] = 12
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///'
     db.create_all()

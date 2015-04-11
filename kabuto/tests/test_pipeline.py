@@ -14,12 +14,10 @@ def test_submit_pipeline(preloaded_client):
     assert rv.status_code == 200
     pipelines = json.loads(rv.data)
 
-    first_pipeline = pipelines[0]
+    first_pipeline = pipelines.keys()[0]
 
-    rv = preloaded_client.post('/pipeline/%s/submit' % first_pipeline['id'])
+    rv = preloaded_client.post('/pipeline/%s/submit' % first_pipeline)
     assert rv.status_code == 200
-
-    print json.loads(rv.data)
 
     submit_id = json.loads(rv.data).keys()[0]
     assert submit_id is not None
