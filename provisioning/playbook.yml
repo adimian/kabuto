@@ -3,12 +3,19 @@
   sudo: True
   tasks:
   
+    - name: update hostname
+      hostname: name=kabuto
+  
     - name: install deps
-      apt: name={{item}}
+      apt: name={{item}} state=latest update_cache=yes
       with_items:
-        - python-pip
+        - python
         - python-dev
         - libffi-dev
+        - rabbitmq-server
+        
+    - name: install pip
+      shell: wget -qO- https://bootstrap.pypa.io/get-pip.py | python
   
     - name: install docker
       shell: wget -qO- https://get.docker.com/ | sh

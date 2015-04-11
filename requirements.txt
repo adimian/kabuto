@@ -20,3 +20,4 @@ six==1.9.0
 SQLAlchemy==0.9.9
 websocket-client==0.29.0
 Werkzeug==0.10.4
+pika==0.9.14
