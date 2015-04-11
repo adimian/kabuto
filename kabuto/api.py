@@ -1,7 +1,7 @@
 from flask import Flask, abort
 import flask_restful as restful
 from flask_restful import reqparse
-from flask_login import LoginManager, login_required, login_user
+from flask_login import LoginManager, login_required, login_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 import os
 import tempfile
@@ -66,7 +66,8 @@ class User(db.Model):
 
 class Image(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    docker_id = db.Column(db.String(64), unique=True)
+    docker_id = db.Column(db.String(64))
+    name = db.Column(db.String(128))
     dockerfile = db.Column(db.Text)
 
     creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
@@ -74,6 +75,12 @@ class Image(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     owner = db.relationship('User',
                             backref=db.backref('images', lazy='dynamic'))
+
+    def __init__(self, dockerfile, docker_id, name, owner):
+        self.dockerfile = dockerfile
+        self.docker_id = docker_id
+        self.name = name
+        self.owner = owner
 
 
 class Job(db.Model):
@@ -141,7 +148,7 @@ class Images(ProtectedResource):
 
         client = get_docker_client()
 
-        # TODO: async
+        # TODO: async all the following
 
         fd, filename = tempfile.mkstemp()
         os.close(fd)
@@ -154,11 +161,15 @@ class Images(ProtectedResource):
 
         last_line = list(output)[-1]
         last_stream = json.loads(last_line)['stream'].strip()
-        image_id = re.search(pattern='Successfully built ([a-z0-9]+)',
-                             string=last_stream).groups()[0]
-
+        docker_id = re.search(pattern='Successfully built ([a-z0-9]+)',
+                              string=last_stream).groups()[0]
         os.remove(filename)
-        return {'id': image_id}
+
+        image = Image(content, docker_id, name, current_user)
+        db.session.add(image)
+        db.session.commit()
+
+        return {'id': image.id}
 
 
 class Pipelines(ProtectedResource):
