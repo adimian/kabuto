@@ -5,7 +5,7 @@ from flask_login import LoginManager, login_required, login_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 import os
 import tempfile
-import uuid
+import pika
 from sqlalchemy.ext.hybrid import hybrid_property
 from flask_bcrypt import Bcrypt
 from sqlalchemy.orm.exc import NoResultFound
@@ -24,6 +24,24 @@ api = restful.Api(app)
 login_manager = LoginManager(app)
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
+
+
+def put_in_message_queue(queue, message):
+    connection = pika.BlockingConnection(pika.ConnectionParameters(
+        host=app.config['AMQP_HOSTNAME']))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue, durable=True)
+
+    properties = pika.BasicProperties(delivery_mode=2,)
+    channel.basic_publish(exchange='',
+                          routing_key=queue,
+                          body=message,
+                          properties=properties)
+    connection.close()
+
+
+def publish_job(message):
+    put_in_message_queue(queue='jobs', message=message)
 
 
 def get_docker_client():
@@ -108,6 +126,7 @@ class Job(db.Model):
     pipeline = db.relationship('Pipeline',
                                backref=db.backref('jobs', lazy='dynamic'))
 
+    command = db.Column(db.Text)
     used_cpu = db.Column(db.Float(precision=2), default=0.)
     used_memory = db.Column(db.Float(precision=2), default=0.)
     used_io = db.Column(db.Float(precision=2), default=0.)
@@ -117,6 +136,10 @@ class Job(db.Model):
         self.image = image
         self.attachments = attachments
         self.command = command
+
+    def serialize(self):
+        return json.dumps({'image': self.image.docker_id,
+                           'command': self.command})
 
 
 class Execution(db.Model):
@@ -241,6 +264,7 @@ class Submitter(ProtectedResource):
             ex = Execution(job)
             db.session.add(ex)
             execs.append(ex)
+            publish_job(message=job.serialize())
         db.session.commit()
         return dict([(ex.id, ex.state) for ex in execs])
 
@@ -266,6 +290,7 @@ api.add_resource(Submitter,
 if __name__ == '__main__':
     app.config['DOCKER_CLIENT'] = 'unix://var/run/docker.sock'
     app.config['BCRYPT_LOG_ROUNDS'] = 12
+    app.config['AMQP_HOSTNAME'] = 'localhost'
     app.config['SECRET_KEY'] = 'haha'
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
 
