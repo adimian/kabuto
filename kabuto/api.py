@@ -85,7 +85,6 @@ class User(db.Model):
 
 class Image(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    docker_id = db.Column(db.String(64))
     name = db.Column(db.String(128))
     dockerfile = db.Column(db.Text)
 
@@ -95,9 +94,8 @@ class Image(db.Model):
     owner = db.relationship('User',
                             backref=db.backref('images', lazy='dynamic'))
 
-    def __init__(self, dockerfile, docker_id, name, owner):
+    def __init__(self, dockerfile, name, owner):
         self.dockerfile = dockerfile
-        self.docker_id = docker_id
         self.name = name
         self.owner = owner
 
@@ -127,19 +125,12 @@ class Job(db.Model):
                                backref=db.backref('jobs', lazy='dynamic'))
 
     command = db.Column(db.Text)
-    used_cpu = db.Column(db.Float(precision=2), default=0.)
-    used_memory = db.Column(db.Float(precision=2), default=0.)
-    used_io = db.Column(db.Float(precision=2), default=0.)
 
     def __init__(self, pipeline, image, attachments, command):
         self.pipeline = pipeline
         self.image = image
         self.attachments = attachments
         self.command = command
-
-    def serialize(self):
-        return json.dumps({'image': self.image.docker_id,
-                           'command': self.command})
 
 
 class Execution(db.Model):
@@ -150,8 +141,17 @@ class Execution(db.Model):
     state = db.Column(db.String(32), default='ready')
     creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
 
+    used_cpu = db.Column(db.Float(precision=2), default=0.)
+    used_memory = db.Column(db.Float(precision=2), default=0.)
+    used_io = db.Column(db.Float(precision=2), default=0.)
+
     def __init__(self, job):
         self.job = job
+
+    def serialize(self):
+        return json.dumps({'execution': self.id,
+                           'image': self.job.image.name,
+                           'command': self.job.command})
 
 
 @login_manager.user_loader
@@ -203,15 +203,11 @@ class Images(ProtectedResource):
 
         with open(filename, 'r') as dockerfile:
             tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
-            output = client.build(tag=tag, fileobj=dockerfile)
+            client.build(tag=tag, fileobj=dockerfile)
 
-        last_line = list(output)[-1]
-        last_stream = json.loads(last_line)['stream'].strip()
-        docker_id = re.search(pattern='Successfully built ([a-z0-9]+)',
-                              string=last_stream).groups()[0]
         os.remove(filename)
 
-        image = Image(content, docker_id, name, current_user)
+        image = Image(content, name, current_user)
         db.session.add(image)
         db.session.commit()
 
@@ -268,8 +264,13 @@ class Submitter(ProtectedResource):
             ex = Execution(job)
             db.session.add(ex)
             execs.append(ex)
-            publish_job(message=job.serialize())
+
+        # we need this before publish, to get the ID
         db.session.commit()
+
+        for ex in execs:
+            publish_job(message=ex.serialize())
+
         return dict([(ex.id, ex.state) for ex in execs])
 
 
