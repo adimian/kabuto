@@ -25,3 +25,6 @@
       
     - name: install pip deps
       command: pip install -r /vagrant/requirements.txt
+      
+    - name: run docker registry
+      command: docker run -d -p 7900:5000 registry
