@@ -9,6 +9,8 @@ class Config(object):
     AMQP_HOSTNAME = 'localhost'
     SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/test.db'
     DOCKER_CLIENT = 'unix://var/run/docker.sock'
+    DOCKER_REGISTRY_URL = 'localhost:7900'
+    DOCKER_REGISTRY_INSECURE = True
 
 
 class TestingConfig(Config):

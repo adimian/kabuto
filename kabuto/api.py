@@ -202,7 +202,8 @@ class Images(ProtectedResource):
             f.write(content)
 
         with open(filename, 'r') as dockerfile:
-            output = client.build(tag=name, fileobj=dockerfile)
+            tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
+            output = client.build(tag=tag, fileobj=dockerfile)
 
         last_line = list(output)[-1]
         last_stream = json.loads(last_line)['stream'].strip()
@@ -213,6 +214,9 @@ class Images(ProtectedResource):
         image = Image(content, docker_id, name, current_user)
         db.session.add(image)
         db.session.commit()
+
+        client.push(repository=tag,
+                    insecure_registry=app.config['DOCKER_REGISTRY_INSECURE'])
 
         return {'id': image.id}
 
