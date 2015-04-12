@@ -288,11 +288,6 @@ api.add_resource(Submitter,
                  '/pipeline/<string:pipeline_id>/submit',)
 
 if __name__ == '__main__':
-    app.config['DOCKER_CLIENT'] = 'unix://var/run/docker.sock'
-    app.config['BCRYPT_LOG_ROUNDS'] = 12
-    app.config['AMQP_HOSTNAME'] = 'localhost'
-    app.config['SECRET_KEY'] = 'haha'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
-
+    app.config.from_object('kabuto.config.Config')
     db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run()

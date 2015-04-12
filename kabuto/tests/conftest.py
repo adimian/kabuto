@@ -6,12 +6,7 @@ import json
 
 @pytest.fixture
 def client():
-    app.config['DOCKER_CLIENT'] = 'unix://var/run/docker.sock'
-    app.config['SECRET_KEY'] = 'haha'
-    app.config['DEBUG'] = True
-    app.config['AMQP_HOSTNAME'] = 'localhost'
-    app.config['BCRYPT_LOG_ROUNDS'] = 12
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///'
+    app.config.from_object('kabuto.config.TestingConfig')
     db.create_all()
     client = app.test_client()
     return client
