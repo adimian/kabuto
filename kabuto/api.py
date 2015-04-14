@@ -1,4 +1,5 @@
-from flask import Flask, abort
+from flask import Flask, abort, request
+from werkzeug.datastructures import FileStorage
 import flask_restful as restful
 from flask_restful import reqparse
 from flask_login import LoginManager, login_required, login_user, current_user
@@ -119,7 +120,7 @@ class Job(db.Model):
     image_id = db.Column(db.Integer, db.ForeignKey('image.id'))
     image = db.relationship('Image',
                             backref=db.backref('jobs', lazy='dynamic'))
-
+    attachments = db.Column(db.String(128))
     pipeline_id = db.Column(db.Integer, db.ForeignKey('pipeline.id'))
     pipeline = db.relationship('Pipeline',
                                backref=db.backref('jobs', lazy='dynamic'))
@@ -237,18 +238,28 @@ class Pipelines(ProtectedResource):
 
 
 class Jobs(ProtectedResource):
+    def get(self, pipeline_id, job_id):
+        jobs = Job.query.filter_by(id=job_id).all()
+        return dict([(p.id, p.attachments) for p in jobs])
+
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
         parser.add_argument('image_id', type=unicode)
         parser.add_argument('command', type=unicode)
-        # TODO: handle upload
-#         parser.add_argument('attachments', type=file)
+
+        parser.add_argument('attachments', type=FileStorage, location='files', action='append', default=[])
         args = parser.parse_args()
+
+        path = tempfile.mkdtemp(prefix='kabuto-inbox-')
+        print args['attachments']
+        for filestorage in args['attachments']:
+            with open(os.path.join(path, filestorage.filename), "wb+") as fh:
+                fh.write(filestorage.read())
 
         pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
         image = Image.query.filter_by(id=args['image_id']).one()
 
-        job = Job(pipeline, image, [], args['command'])
+        job = Job(pipeline, image, path, args['command'])
 
         db.session.add(job)
         db.session.commit()
