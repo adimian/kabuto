@@ -45,6 +45,6 @@ def test_create_job_with_attachment(authenticated_client):
     rv = authenticated_client.get('/pipeline/%s/job/%s' % (pipeline_id, job_id))
     assert rv.status_code == 200
     data = json.loads(rv.data)
-    attachments_path = data[unicode(job_id)]
+    attachments_path = data[unicode(job_id)][0]
     assert os.path.exists(attachments_path)
     assert len(os.listdir(attachments_path)) == 2

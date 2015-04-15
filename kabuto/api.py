@@ -251,7 +251,7 @@ class Pipelines(ProtectedResource):
 class Jobs(ProtectedResource):
     def get(self, pipeline_id, job_id):
         jobs = Job.query.filter_by(id=job_id).all()
-        return dict([(p.id, p.attachments_path) for p in jobs])
+        return dict([(p.id, (p.attachments_path, p.results_path)) for p in jobs])
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
@@ -293,6 +293,11 @@ class Submitter(ProtectedResource):
             publish_job(message=ex.serialize())
 
         return dict([(ex.id, ex.state) for ex in execs])
+
+class Executions(ProtectedResource):
+    def get(self, execution_id):
+        ex = Execution.query.filter_by(id=execution_id).one()
+        return {ex.id: ex.state}
 
 
 class Attachment(restful.Resource):
@@ -354,6 +359,8 @@ api.add_resource(Jobs,
                  '/pipeline/<string:pipeline_id>/job/<string:job_id>')
 api.add_resource(Submitter,
                  '/pipeline/<string:pipeline_id>/submit',)
+api.add_resource(Executions,
+                 '/execution/<string:execution_id>')
 api.add_resource(Attachment,
                  '/execution/<string:execution_id>/attachments/<string:token>',
                  '/execution/<string:execution_id>/results/<string:token>')
