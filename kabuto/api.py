@@ -1,4 +1,4 @@
-from flask import Flask, abort, request
+from flask import Flask, abort, send_file
 from werkzeug.datastructures import FileStorage
 import flask_restful as restful
 from flask_restful import reqparse
@@ -12,8 +12,9 @@ from flask_bcrypt import Bcrypt
 from sqlalchemy.orm.exc import NoResultFound
 import datetime
 import docker
-import re
+import zipfile
 import json
+import uuid
 
 
 class ProtectedResource(restful.Resource):
@@ -120,18 +121,26 @@ class Job(db.Model):
     image_id = db.Column(db.Integer, db.ForeignKey('image.id'))
     image = db.relationship('Image',
                             backref=db.backref('jobs', lazy='dynamic'))
-    attachments = db.Column(db.String(128))
+
     pipeline_id = db.Column(db.Integer, db.ForeignKey('pipeline.id'))
     pipeline = db.relationship('Pipeline',
                                backref=db.backref('jobs', lazy='dynamic'))
 
     command = db.Column(db.Text)
 
+    attachments_token = db.Column(db.String(36))
+    attachments_path = db.Column(db.String(128))
+    results_token = db.Column(db.String(36))
+    results_path = db.Column(db.String(128))
+
     def __init__(self, pipeline, image, attachments, command):
         self.pipeline = pipeline
         self.image = image
-        self.attachments = attachments
         self.command = command
+        self.attachments_token = unicode(uuid.uuid4())
+        self.attachments_path = attachments
+        self.results_token = unicode(uuid.uuid4())
+        self.results_path = tempfile.mkdtemp(prefix='kabuto-outbox-')
 
 
 class Execution(db.Model):
@@ -152,7 +161,9 @@ class Execution(db.Model):
     def serialize(self):
         return json.dumps({'execution': self.id,
                            'image': self.job.image.name,
-                           'command': self.job.command})
+                           'command': self.job.command,
+                           'attachment_token': self.job.attachments_token,
+                           'result_token': self.job.results_token})
 
 
 @login_manager.user_loader
@@ -240,7 +251,7 @@ class Pipelines(ProtectedResource):
 class Jobs(ProtectedResource):
     def get(self, pipeline_id, job_id):
         jobs = Job.query.filter_by(id=job_id).all()
-        return dict([(p.id, p.attachments) for p in jobs])
+        return dict([(p.id, p.attachments_path) for p in jobs])
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
@@ -251,7 +262,6 @@ class Jobs(ProtectedResource):
         args = parser.parse_args()
 
         path = tempfile.mkdtemp(prefix='kabuto-inbox-')
-        print args['attachments']
         for filestorage in args['attachments']:
             with open(os.path.join(path, filestorage.filename), "wb+") as fh:
                 fh.write(filestorage.read())
@@ -285,6 +295,48 @@ class Submitter(ProtectedResource):
         return dict([(ex.id, ex.state) for ex in execs])
 
 
+class Attachment(restful.Resource):
+    def get(self, execution_id, token):
+        ex = Execution.query.filter_by(id=execution_id).one()
+        if not ex.job.attachments_token == token:
+            abort(404)
+        try:
+            zip_file = "%s.zip" % os.path.join("/tmp", token)
+            zipf = zipfile.ZipFile(zip_file, 'w')
+            zipdir(ex.job.attachments_path, zipf, root_folder=ex.job.attachments_path)
+            zipf.close()
+            filename = zip_file
+            return send_file(filename,
+                             as_attachment=True,
+                             attachment_filename=os.path.basename(filename))
+        except Exception, e:
+            return "Something went wrong, contact your admin"
+
+    def post(self, execution_id, token):
+        ex = Execution.query.filter_by(id=execution_id).one()
+        if not ex.job.results_token == token:
+            abort(404)
+        parser = reqparse.RequestParser()
+        parser.add_argument('results', type=FileStorage, location='files', default=None)
+        zip_dir = os.path.join(ex.job.results_path, '%s.zip' % token)
+        args = parser.parse_args()
+        if args['results']:
+            with open(zip_dir, "wb+") as fh:
+                fh.write(args['results'].read())
+
+        with zipfile.ZipFile(zip_dir) as zf:
+            zf.extractall(ex.job.results_path)
+        os.remove(zip_dir)
+
+
+def zipdir(path, zipf, root_folder):
+    # Still need to find a clean way to write empty folders, as this is not being done
+    for root, dirs, files in os.walk(path):
+        for fh in files:
+            file_path = os.path.join(root, fh)
+            zipf.write(file_path, os.path.relpath(file_path, root_folder))
+
+
 class HelloWorld(ProtectedResource):
     def get(self):
         return {'hello': 'world'}
@@ -302,8 +354,12 @@ api.add_resource(Jobs,
                  '/pipeline/<string:pipeline_id>/job/<string:job_id>')
 api.add_resource(Submitter,
                  '/pipeline/<string:pipeline_id>/submit',)
+api.add_resource(Attachment,
+                 '/execution/<string:execution_id>/attachments/<string:token>',
+                 '/execution/<string:execution_id>/results/<string:token>')
 
 if __name__ == '__main__':
     app.config.from_object('kabuto.config.Config')
     db.create_all()
-    app.run()
+    app.run(host=app.config['HOST'],
+            port=app.config['PORT'])

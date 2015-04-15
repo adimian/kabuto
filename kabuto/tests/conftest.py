@@ -2,7 +2,10 @@ import pytest
 from kabuto.api import app, db
 from kabuto.tests import sample_dockerfile
 import json
+import os
 
+
+ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 @pytest.fixture
 def client():
@@ -21,18 +24,32 @@ def authenticated_client(client):
 
 @pytest.fixture
 def preloaded_client(authenticated_client):
-    rv = authenticated_client.post('/image',
-                                   data={'dockerfile': sample_dockerfile,
-                                         'name': 'hellozeworld'})
+    data = {'command': 'echo hello world'}
+    preload(authenticated_client, data)
+    return authenticated_client
+
+
+@pytest.fixture
+def preloaded_client_with_attachments(authenticated_client):
+    data = {'command': 'cat /inbox/file1.txt > /outbox/output1.txt',
+            'attachments': [(open(os.path.join(ROOT_DIR, "data", "file1.txt"), "rb"), 'test1.txt'),
+                            (open(os.path.join(ROOT_DIR, "data", "file2.txt"), "rb"), 'test2.txt')]}
+    preload(authenticated_client, data)
+    return authenticated_client
+
+
+def preload(client, data):
+    rv = client.post('/image',
+                     data={'dockerfile': sample_dockerfile,
+                           'name': 'hellozeworld'})
     image_id = json.loads(rv.data)['id']
 
-    rv = authenticated_client.post('/pipeline',
-                                   data={'name': 'my first pipeline'})
+    rv = client.post('/pipeline',
+                     data={'name': 'my first pipeline'})
     pipeline_id = json.loads(rv.data)['id']
 
-    authenticated_client.post('/pipeline/%s/job' % pipeline_id,
-                              data={'image_id': image_id,
-                                    'command': 'echo hello world'})
+    data['image_id'] = image_id
+    rv = client.post('/pipeline/%s/job' % pipeline_id,
+                              data=data)
     job_id = json.loads(rv.data)['id']
     assert job_id is not None
-    return authenticated_client

@@ -1,4 +1,5 @@
 import json
+import time
 
 
 def test_create_pipeline(authenticated_client):
@@ -20,4 +21,5 @@ def test_submit_pipeline(preloaded_client):
     assert rv.status_code == 200
 
     submit_id = json.loads(rv.data).keys()[0]
+    time.sleep(10)
     assert submit_id is not None
