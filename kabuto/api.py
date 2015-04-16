@@ -1,4 +1,4 @@
-from flask import Flask, abort, send_file
+from flask import Flask, abort, send_file, request
 from werkzeug.datastructures import FileStorage
 import flask_restful as restful
 from flask_restful import reqparse
@@ -15,6 +15,8 @@ import docker
 import zipfile
 import json
 import uuid
+import logging
+import sys
 
 
 class ProtectedResource(restful.Resource):
@@ -26,6 +28,13 @@ api = restful.Api(app)
 login_manager = LoginManager(app)
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
+
+logger = logging.getLogger(__name__)
+logger.level = logging.DEBUG
+
+def get_remote_ip():
+    return request.environ.get('HTTP_X_REAL_IP') or \
+        request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
 
 
 def put_in_message_queue(queue, message):
@@ -165,6 +174,17 @@ class Execution(db.Model):
                            'attachment_token': self.job.attachments_token,
                            'result_token': self.job.results_token})
 
+class ExecutionLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    execution_id = db.Column(db.Integer, db.ForeignKey('execution.id'))
+    execution = db.relationship('Execution',
+                            backref=db.backref('logs', lazy='dynamic'))
+    logline = db.Column(db.Text)
+
+    def __init__(self, execution, line):
+        self.execution = execution
+        self.logline = line
+
 
 @login_manager.user_loader
 def load_user(username):
@@ -294,16 +314,41 @@ class Submitter(ProtectedResource):
 
         return dict([(ex.id, ex.state) for ex in execs])
 
+
 class Executions(ProtectedResource):
     def get(self, execution_id):
         ex = Execution.query.filter_by(id=execution_id).one()
         return {ex.id: ex.state}
 
 
+class LogDeposit(restful.Resource):
+    def post(self, execution_id, token):
+        ex = Execution.query.filter_by(id=execution_id).one()
+        if not ex or not ex.job.results_token == token:
+            logging.info("Unauthorized log deposit from %s with token: %s" % (get_remote_ip(), token))
+            abort(404)
+
+        parser = reqparse.RequestParser()
+        parser.add_argument('log_line', type=unicode)
+        args = parser.parse_args()
+
+        db.session.add(ExecutionLog(ex, args['log_line']))
+        db.session.commit()
+
+
+class LogWithdrawal(ProtectedResource):
+    def get(self, execution_id, last_id=None):
+        logs = ExecutionLog.query.filter_by(execution_id=execution_id)
+        if last_id:
+            logs.filter(ExecutionLog.id > last_id)
+        return dict([(log.id, log.logline) for log in logs])
+
+
 class Attachment(restful.Resource):
     def get(self, execution_id, token):
         ex = Execution.query.filter_by(id=execution_id).one()
-        if not ex.job.attachments_token == token:
+        if not ex or not ex.job.attachments_token == token:
+            logging.info("Unauthorized download request from %s with token: %s" % (get_remote_ip(), token))
             abort(404)
         try:
             zip_file = "%s.zip" % os.path.join("/tmp", token)
@@ -320,6 +365,7 @@ class Attachment(restful.Resource):
     def post(self, execution_id, token):
         ex = Execution.query.filter_by(id=execution_id).one()
         if not ex.job.results_token == token:
+            logging.info("Unauthorized upload request from %s with token: %s" % (get_remote_ip(), token))
             abort(404)
         parser = reqparse.RequestParser()
         parser.add_argument('results', type=FileStorage, location='files', default=None)
@@ -364,6 +410,11 @@ api.add_resource(Executions,
 api.add_resource(Attachment,
                  '/execution/<string:execution_id>/attachments/<string:token>',
                  '/execution/<string:execution_id>/results/<string:token>')
+api.add_resource(LogDeposit,
+                 '/execution/<string:execution_id>/log/<string:token>')
+api.add_resource(LogWithdrawal,
+                 '/execution/<string:execution_id>/logs',
+                 '/execution/<string:execution_id>/logs/<string:last_id>')
 
 if __name__ == '__main__':
     app.config.from_object('kabuto.config.Config')

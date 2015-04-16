@@ -7,7 +7,7 @@ from kabuto.tests import sample_dockerfile
 import time
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
-data = {'command': 'cp /inbox/file1.txt /outbox/output1.txt'}
+data = {'command': ['cp /inbox/file1.txt /outbox/output1.txt', "ll"]}
 files = [("attachments", open(os.path.join(ROOT_DIR, "data", "file1.txt"), "rb")),
          ("attachments", open(os.path.join(ROOT_DIR, "data", "file2.txt"), "rb"))]
 base_url = "http://127.0.0.1:5000"
@@ -47,11 +47,28 @@ for eid, state in r.json().iteritems():
 r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
                   cookies=c)
 
+r = requests.get('%s/execution/%s/logs' % (base_url, eid),
+                  cookies=c)
+print "Initial logs"
+last_log_line = -1
+for log_id, log in r.json().iteritems():
+    last_log_line = log_id
+    print log
+
 # Poll the execution for it's state to continue, not implemented yet
 # so doing a dirty sleep
 # r = requests.get('%s/execution/%s' % (base_url, eid),
 #                   cookies=c)
 # while not r.json()[unicode(eid)] == "done":
 #     time.sleep(1)
+
 time.sleep(1)
+
+r = requests.get('%s/execution/%s/logs/%s' % (base_url, eid, last_log_line),
+                  cookies=c)
+print "Follow up logs"
+for log_id, log in r.json().iteritems():
+    last_log_line = log_id
+    print log
+
 assert "output1.txt" in os.listdir(r.json()[unicode(job_id)][1])
