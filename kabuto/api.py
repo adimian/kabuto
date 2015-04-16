@@ -367,17 +367,32 @@ class Attachment(restful.Resource):
         if not ex.job.results_token == token:
             logging.info("Unauthorized upload request from %s with token: %s" % (get_remote_ip(), token))
             abort(404)
+
         parser = reqparse.RequestParser()
         parser.add_argument('results', type=FileStorage, location='files', default=None)
-        zip_dir = os.path.join(ex.job.results_path, '%s.zip' % token)
+        parser.add_argument('state', type=unicode, required=True)
+        parser.add_argument('response')
+        parser.add_argument('cpu', type=int, required=True)
+        parser.add_argument('memory', type=int, required=True)
+        parser.add_argument('io', type=int, required=True)
         args = parser.parse_args()
+
+        zip_dir = os.path.join(ex.job.results_path, '%s.zip' % token)
         if args['results']:
             with open(zip_dir, "wb+") as fh:
                 fh.write(args['results'].read())
 
+        print ex.job.results_path
         with zipfile.ZipFile(zip_dir) as zf:
             zf.extractall(ex.job.results_path)
+
         os.remove(zip_dir)
+        ex.state = args['state']
+        ex.used_cpu = args['cpu']
+        ex.used_memory = args['memory']
+        ex.used_io = args['io']
+        db.session.add(ex)
+        db.session.commit()
 
 
 def zipdir(path, zipf, root_folder):

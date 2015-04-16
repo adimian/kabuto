@@ -44,9 +44,6 @@ print "submitted job with following executions:"
 for eid, state in r.json().iteritems():
     print "id: %s - state(%s)" % (eid, state)
 
-r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
-                  cookies=c)
-
 r = requests.get('%s/execution/%s/logs' % (base_url, eid),
                   cookies=c)
 print "Initial logs"
@@ -55,14 +52,18 @@ for log_id, log in r.json().iteritems():
     last_log_line = log_id
     print log
 
-# Poll the execution for it's state to continue, not implemented yet
-# so doing a dirty sleep
-# r = requests.get('%s/execution/%s' % (base_url, eid),
-#                   cookies=c)
-# while not r.json()[unicode(eid)] == "done":
-#     time.sleep(1)
 
-time.sleep(1)
+def poll_for_state():
+    r = requests.get('%s/execution/%s' % (base_url, eid),
+                      cookies=c)
+    return r.json()[unicode(eid)]
+
+state = poll_for_state()
+while not state == "done":
+    print "state is %s" % state
+    print "polling..."
+    state = poll_for_state()
+    time.sleep(1)
 
 r = requests.get('%s/execution/%s/logs/%s' % (base_url, eid, last_log_line),
                   cookies=c)
@@ -71,4 +72,7 @@ for log_id, log in r.json().iteritems():
     last_log_line = log_id
     print log
 
+
+r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
+                  cookies=c)
 assert "output1.txt" in os.listdir(r.json()[unicode(job_id)][1])
