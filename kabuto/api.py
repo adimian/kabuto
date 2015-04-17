@@ -58,7 +58,7 @@ def publish_job(message):
 def get_docker_client():
     client = docker.Client(base_url=app.config['DOCKER_CLIENT'])
     if app.config['DOCKER_LOGIN']:
-        client.login(app.config['DOCKER_LOGIN'], app.config['DOCKER_PASSWORD'])
+        client.login(app.config['DOCKER_LOGIN'], app.config['DOCKER_PASSWORD'], registry=app.config['DOCKER_REGISTRY'])
     return client
 
 
