@@ -16,7 +16,6 @@ import zipfile
 import json
 import uuid
 import logging
-import sys
 
 
 class ProtectedResource(restful.Resource):
@@ -31,6 +30,7 @@ bcrypt = Bcrypt(app)
 
 logger = logging.getLogger(__name__)
 logger.level = logging.DEBUG
+
 
 def get_remote_ip():
     return request.environ.get('HTTP_X_REAL_IP') or \
@@ -58,7 +58,9 @@ def publish_job(message):
 def get_docker_client():
     client = docker.Client(base_url=app.config['DOCKER_CLIENT'])
     if app.config['DOCKER_LOGIN']:
-        client.login(app.config['DOCKER_LOGIN'], app.config['DOCKER_PASSWORD'], registry=app.config['DOCKER_REGISTRY'])
+        client.login(app.config['DOCKER_LOGIN'],
+                     app.config['DOCKER_PASSWORD'],
+                     registry=app.config['DOCKER_REGISTRY'])
     return client
 
 
@@ -176,11 +178,12 @@ class Execution(db.Model):
                            'attachment_token': self.job.attachments_token,
                            'result_token': self.job.results_token})
 
+
 class ExecutionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     execution_id = db.Column(db.Integer, db.ForeignKey('execution.id'))
     execution = db.relationship('Execution',
-                            backref=db.backref('logs', lazy='dynamic'))
+                                backref=db.backref('logs', lazy='dynamic'))
     logline = db.Column(db.Text)
 
     def __init__(self, execution, line):
@@ -273,14 +276,16 @@ class Pipelines(ProtectedResource):
 class Jobs(ProtectedResource):
     def get(self, pipeline_id, job_id):
         jobs = Job.query.filter_by(id=job_id).all()
-        return dict([(p.id, (p.attachments_path, p.results_path)) for p in jobs])
+        re = dict([(p.id, (p.attachments_path, p.results_path)) for p in jobs])
+        return re
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
         parser.add_argument('image_id', type=unicode)
         parser.add_argument('command', type=unicode)
 
-        parser.add_argument('attachments', type=FileStorage, location='files', action='append', default=[])
+        parser.add_argument('attachments', type=FileStorage, location='files',
+                            action='append', default=[])
         args = parser.parse_args()
 
         path = tempfile.mkdtemp(prefix='kabuto-inbox-')
@@ -327,7 +332,8 @@ class LogDeposit(restful.Resource):
     def post(self, execution_id, token):
         ex = Execution.query.filter_by(id=execution_id).one()
         if not ex or not ex.job.results_token == token:
-            logging.info("Unauthorized log deposit from %s with token: %s" % (get_remote_ip(), token))
+            msg = "Unauthorized log deposit from %s with token: %s"
+            logging.info(msg % (get_remote_ip(), token))
             abort(404)
 
         parser = reqparse.RequestParser()
@@ -350,28 +356,31 @@ class Attachment(restful.Resource):
     def get(self, execution_id, token):
         ex = Execution.query.filter_by(id=execution_id).one()
         if not ex or not ex.job.attachments_token == token:
-            logging.info("Unauthorized download request from %s with token: %s" % (get_remote_ip(), token))
+            msg = "Unauthorized download request from %s with token: %s"
+            logging.info(msg % (get_remote_ip(), token))
             abort(404)
         try:
-            zip_file = "%s.zip" % os.path.join("/tmp", token)
+            zip_file = "%s.zip" % os.path.join(tempfile.mkdtemp(), token)
             zipf = zipfile.ZipFile(zip_file, 'w')
-            zipdir(ex.job.attachments_path, zipf, root_folder=ex.job.attachments_path)
+            zipdir(ex.job.attachments_path, zipf,
+                   root_folder=ex.job.attachments_path)
             zipf.close()
-            filename = zip_file
-            return send_file(filename,
+            return send_file(zip_file,
                              as_attachment=True,
-                             attachment_filename=os.path.basename(filename))
-        except Exception, e:
+                             attachment_filename=os.path.basename(zip_file))
+        except Exception:
             return "Something went wrong, contact your admin"
 
     def post(self, execution_id, token):
         ex = Execution.query.filter_by(id=execution_id).one()
         if not ex.job.results_token == token:
-            logging.info("Unauthorized upload request from %s with token: %s" % (get_remote_ip(), token))
+            msg = "Unauthorized upload request from %s with token: %s"
+            logging.info(msg % (get_remote_ip(), token))
             abort(404)
 
         parser = reqparse.RequestParser()
-        parser.add_argument('results', type=FileStorage, location='files', default=None)
+        parser.add_argument('results', type=FileStorage,
+                            location='files', default=None)
         parser.add_argument('state', type=unicode, required=True)
         parser.add_argument('response')
         parser.add_argument('cpu', type=int, required=True)
@@ -397,8 +406,9 @@ class Attachment(restful.Resource):
 
 
 def zipdir(path, zipf, root_folder):
-    # Still need to find a clean way to write empty folders, as this is not being done
-    for root, dirs, files in os.walk(path):
+    # Still need to find a clean way to write empty folders,
+    # as this is not being done
+    for root, _, files in os.walk(path):
         for fh in files:
             file_path = os.path.join(root, fh)
             zipf.write(file_path, os.path.relpath(file_path, root_folder))
