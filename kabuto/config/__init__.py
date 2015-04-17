@@ -11,6 +11,8 @@ class Config(object):
     DOCKER_CLIENT = 'unix://var/run/docker.sock'
     DOCKER_REGISTRY_URL = 'localhost:7900'
     DOCKER_REGISTRY_INSECURE = True
+    DOCKER_LOGIN = ""
+    DOCKER_PASSWORD = ""
 
 
 class TestingConfig(Config):

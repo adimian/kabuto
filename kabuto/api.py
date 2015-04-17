@@ -57,6 +57,8 @@ def publish_job(message):
 
 def get_docker_client():
     client = docker.Client(base_url=app.config['DOCKER_CLIENT'])
+    if app.config['DOCKER_LOGIN']:
+        client.login(app.config['DOCKER_LOGIN'], app.config['DOCKER_PASSWORD'])
     return client
 
 
@@ -382,7 +384,6 @@ class Attachment(restful.Resource):
             with open(zip_dir, "wb+") as fh:
                 fh.write(args['results'].read())
 
-        print ex.job.results_path
         with zipfile.ZipFile(zip_dir) as zf:
             zf.extractall(ex.job.results_path)
 
