@@ -16,6 +16,7 @@ import zipfile
 import json
 import uuid
 import logging
+from kabuto.mailer import send_token
 
 
 class ProtectedResource(restful.Resource):
@@ -71,9 +72,11 @@ class User(db.Model):
     source = db.Column(db.String(32))  # internal/LDAP/...
     active = db.Column(db.Boolean, default=False)
     email = db.Column(db.String(256), unique=True)
+    token = db.Column(db.String(36))
 
-    def __init__(self, login):
+    def __init__(self, login, password):
         self.login = login
+        self.password = password
 
     @hybrid_property
     def password(self):
@@ -414,12 +417,42 @@ def zipdir(path, zipf, root_folder):
             zipf.write(file_path, os.path.relpath(file_path, root_folder))
 
 
+class Register(restful.Resource):
+    def get(self, user, token):
+        user = User.query.filter_by(login=user).one()
+        if user and user.token == token:
+            user.active = True
+            db.session.add(user)
+            db.session.commit()
+            return {"registration": "success"}
+        return {"registration": "user or token not found"}
+
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('username', type=unicode, required=True)
+        parser.add_argument('password', type=unicode, required=True)
+        parser.add_argument('email', type=unicode, required=True)
+        args = parser.parse_args()
+
+        user = User(login=args['username'],
+                    password=args['password'],
+                    email=args['email'])
+        user.token = unicode(uuid.uuid4())
+        db.session.add(user)
+        db.session.commit()
+        send_token(args['email'], user, user.token,
+                   url_root=request.url_root[:-1])
+
+
 class HelloWorld(ProtectedResource):
     def get(self):
         return {'hello': 'world'}
 
 api.add_resource(HelloWorld, '/')
 api.add_resource(Login, '/login')
+api.add_resource(Register,
+                 '/register',
+                 '/register/confirm/<string:user>/<string:token>')
 api.add_resource(Images,
                  '/image',
                  '/image/<string:image_id>')
