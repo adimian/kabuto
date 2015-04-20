@@ -10,7 +10,7 @@ def test_download_attachments(preloaded_client_with_attachments):
     job = Job.query.all()[0]
     url = "/execution/%s/attachments/%s" % (job.id, job.attachments_token)
     rv = preloaded_client_with_attachments.get(url)
-
+    assert rv.status_code == 200
     expected_files = ["test1.txt", "test2.txt"]
     zp = zipfile.ZipFile(StringIO(rv.data))
     il = zp.infolist()
@@ -21,9 +21,16 @@ def test_download_attachments(preloaded_client_with_attachments):
 
 def test_upload_attachments(preloaded_client_with_attachments):
     job = Job.query.all()[0]
+    result_path = job.results_path
     url = "/execution/%s/results/%s" % (job.id, job.results_token)
     data = {'results': (open(os.path.join(ROOT_DIR, "data", "results.zip")),
-                        'results.zip')}
-    preloaded_client_with_attachments.post(url, data=data)
-    assert os.path.exists(os.path.join(job.results_path, "file1.txt"))
-    assert os.path.exists(os.path.join(job.results_path, "file2.txt"))
+                        'results.zip'),
+            "state": "done",
+            "response": "done",
+            "cpu": 0,
+            "memory": 0,
+            "io": 0}
+    rv = preloaded_client_with_attachments.post(url, data=data)
+    assert rv.status_code == 200
+    assert os.path.exists(os.path.join(result_path, "file1.txt"))
+    assert os.path.exists(os.path.join(result_path, "file2.txt"))

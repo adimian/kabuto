@@ -98,7 +98,7 @@ class User(db.Model):
         return True
 
     def get_id(self):
-        return self.id
+        return self.login
 
 
 class Image(db.Model):
@@ -165,10 +165,10 @@ class Job(db.Model):
 
     def serialize(self):
         return json.dumps({'execution': self.id,
-                           'image': self.job.image.name,
-                           'command': self.job.command,
-                           'attachment_token': self.job.attachments_token,
-                           'result_token': self.job.results_token})
+                           'image': self.image.name,
+                           'command': self.command,
+                           'attachment_token': self.attachments_token,
+                           'result_token': self.results_token})
 
 
 class ExecutionLog(db.Model):
@@ -188,8 +188,6 @@ def load_user(username):
         user = User.query.filter_by(login=username).one()
     except NoResultFound:
         return None
-    print user
-    print user.is_authenticated()
     return user
 
 
@@ -270,7 +268,8 @@ class Pipelines(ProtectedResource):
 class Jobs(ProtectedResource):
     def get(self, pipeline_id, job_id):
         jobs = Job.query.filter_by(id=job_id).all()
-        re = dict([(p.id, (p.attachments_path, p.results_path)) for p in jobs])
+        re = dict([(p.id, (p.attachments_path,
+                           p.results_path, p.state)) for p in jobs])
         return re
 
     def post(self, pipeline_id):
@@ -354,6 +353,7 @@ class Attachment(restful.Resource):
 
     def post(self, job_id, token):
         job = Job.query.filter_by(id=job_id).one()
+
         if not job.results_token == token:
             msg = "Unauthorized upload request from %s with token: %s"
             logging.info(msg % (get_remote_ip(), token))
@@ -443,13 +443,13 @@ api.add_resource(Jobs,
 api.add_resource(Submitter,
                  '/pipeline/<string:pipeline_id>/submit')
 api.add_resource(Attachment,
-                 '/execution/<string:execution_id>/attachments/<string:token>',
-                 '/execution/<string:execution_id>/results/<string:token>')
+                 '/execution/<string:job_id>/attachments/<string:token>',
+                 '/execution/<string:job_id>/results/<string:token>')
 api.add_resource(LogDeposit,
-                 '/execution/<string:execution_id>/log/<string:token>')
+                 '/execution/<string:job_id>/log/<string:token>')
 api.add_resource(LogWithdrawal,
-                 '/execution/<string:execution_id>/logs',
-                 '/execution/<string:execution_id>/logs/<string:last_id>')
+                 '/execution/<string:job_id>/logs',
+                 '/execution/<string:job_id>/logs/<string:last_id>')
 
 if __name__ == '__main__':
     app.config.from_object('kabuto.config.Config')

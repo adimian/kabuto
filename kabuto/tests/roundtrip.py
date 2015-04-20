@@ -12,14 +12,16 @@ files = [("attachments", open(os.path.join(ROOT_DIR, "data", "file1.txt"), "rb")
          ("attachments", open(os.path.join(ROOT_DIR, "data", "file2.txt"), "rb"))]
 base_url = "http://127.0.0.1:5000"
 
-r = requests.post('%s/login' % base_url, data={'login': 'me',
-                                'password': 'Secret'})
+r = requests.post('%s/login' % base_url, data={'login': 'maarten',
+                                               'password': 'test'})
 c = r.cookies
 
 r = requests.post('%s/image' % base_url,
                  data={'dockerfile': sample_dockerfile,
                        'name': 'hellozeworld'},
                   cookies=c)
+print r
+print r.json
 image_id = r.json()['id']
 print "created image"
 
@@ -44,8 +46,8 @@ print "submitted job with following executions:"
 for eid, state in r.json().iteritems():
     print "id: %s - state(%s)" % (eid, state)
 
-r = requests.get('%s/execution/%s/logs' % (base_url, eid),
-                  cookies=c)
+r = requests.get('%s/execution/%s/logs' % (base_url, job_id),
+                 cookies=c)
 print "Initial logs"
 last_log_line = -1
 for log_id, log in r.json().iteritems():
@@ -54,9 +56,9 @@ for log_id, log in r.json().iteritems():
 
 
 def poll_for_state():
-    r = requests.get('%s/execution/%s' % (base_url, eid),
-                      cookies=c)
-    return r.json()[unicode(eid)]
+    url = "%s/pipeline/%s/job/%s" % (base_url, pipeline_id, job_id)
+    r = requests.get(url, cookies=c)
+    return r.json()[unicode(job_id)][2]
 
 state = poll_for_state()
 while not state == "done":
@@ -65,8 +67,8 @@ while not state == "done":
     state = poll_for_state()
     time.sleep(1)
 
-r = requests.get('%s/execution/%s/logs/%s' % (base_url, eid, last_log_line),
-                  cookies=c)
+r = requests.get('%s/execution/%s/logs/%s' % (base_url, job_id, last_log_line),
+                 cookies=c)
 print "Follow up logs"
 for log_id, log in r.json().iteritems():
     last_log_line = log_id
@@ -74,5 +76,6 @@ for log_id, log in r.json().iteritems():
 
 
 r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
-                  cookies=c)
+                 cookies=c)
+r.json()
 assert "output1.txt" in os.listdir(r.json()[unicode(job_id)][1])
