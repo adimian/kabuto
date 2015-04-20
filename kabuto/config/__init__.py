@@ -2,7 +2,7 @@ class Config(object):
     HOST = '0.0.0.0'
     PORT = 5000
     DEBUG = True
-    TESTING = True
+    TESTING = False
     BCRYPT_LOG_ROUNDS = 12
     CSRF_ENABLED = True
     SECRET_KEY = 'you-will-never-get-me'
