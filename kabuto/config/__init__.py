@@ -13,10 +13,10 @@ class Config(object):
     DOCKER_REGISTRY_INSECURE = True
     DOCKER_LOGIN = ""
     DOCKER_PASSWORD = ""
-    MAIL_SERVER = 'smtp-adimian.alwaysdata.net'
-    MAIL_AUTHOR = 'Adimian'
-    MAIL_SENDER_ADDRESS = 'kabuto'
-    MAIL_SENDER_PW = '4yhLx1ZmUYonchhOTQEq'
+    MAIL_SERVER = ''
+    MAIL_AUTHOR = ''
+    MAIL_SENDER_ADDRESS = ''
+    MAIL_SENDER_PW = ''
 
 
 class TestingConfig(Config):

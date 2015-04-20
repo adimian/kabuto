@@ -74,9 +74,10 @@ class User(db.Model):
     email = db.Column(db.String(256), unique=True)
     token = db.Column(db.String(36))
 
-    def __init__(self, login, password):
+    def __init__(self, login, password, email):
         self.login = login
         self.password = password
+        self.email = email
 
     @hybrid_property
     def password(self):
@@ -199,9 +200,7 @@ def load_user(username):
     try:
         user = User.query.filter_by(login=username).one()
     except NoResultFound:
-        user = User(login=username)
-        db.session.add(user)
-        db.session.commit()
+        return None
     return user
 
 
@@ -214,9 +213,10 @@ class Login(restful.Resource):
 
         if args['login'] and args['password']:
             user = load_user(args['login'])
-            login_user(user)
-            return {'login': 'success'}
-
+            if user:
+                if user.is_correct_password(args['password']):
+                    login_user(user)
+                    return {'login': 'success'}
         abort(401)
 
 
