@@ -16,7 +16,8 @@ import zipfile
 import json
 import uuid
 import logging
-from kabuto.mailer import send_token
+
+from mailer import send_token
 
 
 class ProtectedResource(restful.Resource):
@@ -452,7 +453,7 @@ api.add_resource(LogWithdrawal,
                  '/execution/<string:job_id>/logs/<string:last_id>')
 
 if __name__ == '__main__':
-    app.config.from_object('kabuto.config.Config')
+    app.config.from_object('config.Config')
     db.create_all()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])
