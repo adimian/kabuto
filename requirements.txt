@@ -5,10 +5,6 @@ Flask-Bcrypt==0.6.2
 Flask-Login==0.2.11
 Flask-RESTful==0.3.2
 Flask-SQLAlchemy==2.0
-pytest==2.7.0
+pytest
 requests==2.6.0
-pika==0.9.14
-# for urllib3 warnings
-pyopenssl
-ndg-httpsclient
-pyasn1
+python3-pika==0.9.14

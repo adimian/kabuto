@@ -52,14 +52,14 @@ def preload(client, data):
     rv = client.post('/image',
                      data={'dockerfile': sample_dockerfile,
                            'name': 'hellozeworld'})
-    image_id = json.loads(rv.data)['id']
+    image_id = json.loads(rv.data.decode('utf-8'))['id']
 
     rv = client.post('/pipeline',
                      data={'name': 'my first pipeline'})
-    pipeline_id = json.loads(rv.data)['id']
+    pipeline_id = json.loads(rv.data.decode('utf-8'))['id']
 
-    data['image_id'] = image_id
+    data['image_id'] = str(image_id)
     rv = client.post('/pipeline/%s/job' % pipeline_id,
                      data=data)
-    job_id = json.loads(rv.data)['id']
+    job_id = json.loads(rv.data.decode('utf-8'))['id']
     assert job_id is not None

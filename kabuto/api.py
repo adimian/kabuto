@@ -1,23 +1,25 @@
-from flask import Flask, abort, send_file, request
-from werkzeug.datastructures import FileStorage
-import flask_restful as restful
-from flask_restful import reqparse
-from flask_login import LoginManager, login_required, login_user, current_user
-from flask_sqlalchemy import SQLAlchemy
+import datetime
+import json
+import logging
 import os
 import tempfile
-import pika
-from sqlalchemy.ext.hybrid import hybrid_property
-from flask_bcrypt import Bcrypt
-from sqlalchemy.orm.exc import NoResultFound
-import datetime
-import docker
-import zipfile
-import json
 import uuid
-import logging
+import zipfile
 
-from mailer import send_token
+from flask import Flask, abort, send_file, request
+from flask_bcrypt import Bcrypt
+from flask_login import LoginManager, login_required, login_user, current_user
+from flask_restful import reqparse
+from flask_sqlalchemy import SQLAlchemy
+from io import BytesIO
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm.exc import NoResultFound
+from werkzeug.datastructures import FileStorage
+import docker
+import flask_restful as restful
+import pika
+
+from .mailer import send_token
 
 
 class ProtectedResource(restful.Resource):
@@ -160,8 +162,8 @@ class Job(db.Model):
         self.image = image
         self.command = command
         self.attachments_path = attachments
-        self.attachments_token = unicode(uuid.uuid4())
-        self.results_token = unicode(uuid.uuid4())
+        self.attachments_token = str(uuid.uuid4())
+        self.results_token = str(uuid.uuid4())
         self.results_path = tempfile.mkdtemp(prefix='kabuto-outbox-')
 
     def serialize(self):
@@ -195,47 +197,34 @@ def load_user(username):
 class Login(restful.Resource):
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('login', type=unicode, required=True)
-        parser.add_argument('password', type=unicode, required=True)
+        parser.add_argument('login', type=str, required=True)
+        parser.add_argument('password', type=str, required=True)
         args = parser.parse_args()
 
-        if args['login'] and args['password']:
-            user = load_user(args['login'])
-            print user
-            if user:
-                if user.is_correct_password(args['password']):
-                    login_user(user)
-                    print "logged in"
-                    return {'login': 'success'}
+        user = load_user(args['login'])
+        if user:
+            if user.is_correct_password(args['password']):
+                login_user(user)
+                return {'login': 'success'}
         abort(401)
 
 
 class Images(ProtectedResource):
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('dockerfile', type=unicode, required=True)
-        parser.add_argument('name', type=unicode, required=True)
+        parser.add_argument('dockerfile', type=str, required=True)
+        parser.add_argument('name', type=str, required=True)
 
         args = parser.parse_args()
         content = args['dockerfile']
-
         name = args['name']
 
         client = get_docker_client()
 
         # TODO: async all the following
 
-        fd, filename = tempfile.mkstemp()
-        os.close(fd)
-
-        with open(filename, 'w') as f:
-            f.write(content)
-
-        with open(filename, 'r') as dockerfile:
-            tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
-            client.build(tag=tag, fileobj=dockerfile)
-
-        os.remove(filename)
+        tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
+        client.build(tag=tag, fileobj=BytesIO(content.encode('utf-8')))
 
         image = Image(content, name, current_user)
         db.session.add(image)
@@ -254,10 +243,9 @@ class Pipelines(ProtectedResource):
 
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('name', type=unicode, required=True)
+        parser.add_argument('name', type=str, required=True)
         args = parser.parse_args()
         name = args['name']
-
         pipeline = Pipeline(name, current_user)
 
         db.session.add(pipeline)
@@ -275,8 +263,8 @@ class Jobs(ProtectedResource):
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
-        parser.add_argument('image_id', type=unicode)
-        parser.add_argument('command', type=unicode)
+        parser.add_argument('image_id', type=str)
+        parser.add_argument('command', type=str)
 
         parser.add_argument('attachments', type=FileStorage, location='files',
                             action='append', default=[])
@@ -318,7 +306,7 @@ class LogDeposit(restful.Resource):
             abort(404)
 
         parser = reqparse.RequestParser()
-        parser.add_argument('log_line', type=unicode)
+        parser.add_argument('log_line', type=str)
         args = parser.parse_args()
 
         db.session.add(ExecutionLog(job, args['log_line']))
@@ -363,7 +351,7 @@ class Attachment(restful.Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('results', type=FileStorage,
                             location='files', default=None)
-        parser.add_argument('state', type=unicode, required=True)
+        parser.add_argument('state', type=str, required=True)
         parser.add_argument('response')
         parser.add_argument('cpu', type=int, required=True)
         parser.add_argument('memory', type=int, required=True)
@@ -408,15 +396,15 @@ class Register(restful.Resource):
 
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('username', type=unicode, required=True)
-        parser.add_argument('password', type=unicode, required=True)
-        parser.add_argument('email', type=unicode, required=True)
+        parser.add_argument('username', type=str, required=True)
+        parser.add_argument('password', type=str, required=True)
+        parser.add_argument('email', type=str, required=True)
         args = parser.parse_args()
 
         user = User(login=args['username'],
                     password=args['password'],
                     email=args['email'])
-        user.token = unicode(uuid.uuid4())
+        user.token = str(uuid.uuid4())
         db.session.add(user)
         db.session.commit()
         send_token(args['email'], user, user.token,

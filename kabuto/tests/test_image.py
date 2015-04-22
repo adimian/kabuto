@@ -7,5 +7,5 @@ def test_create_image(authenticated_client):
                                    data={'dockerfile': sample_dockerfile,
                                          'name': 'hellozeworld'})
     assert rv.status_code == 200
-    image_id = json.loads(rv.data)['id']
+    image_id = json.loads(rv.data.decode('utf-8'))['id']
     assert image_id is not None
