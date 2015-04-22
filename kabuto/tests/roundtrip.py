@@ -44,14 +44,14 @@ print("created job")
 r = requests.post('%s/pipeline/%s/submit' % (base_url, pipeline_id),
                   cookies=c)
 print("submitted job with following executions:")
-for eid, state in r.json().iteritems():
+for eid, state in r.json().items():
     print("id: %s - state(%s)" % (eid, state))
 
 r = requests.get('%s/execution/%s/logs' % (base_url, job_id),
                  cookies=c)
 print("Initial logs")
 last_log_line = -1
-for log_id, log in r.json().iteritems():
+for log_id, log in r.json().items():
     last_log_line = log_id
     print(log)
 
@@ -59,7 +59,7 @@ for log_id, log in r.json().iteritems():
 def poll_for_state():
     url = "%s/pipeline/%s/job/%s" % (base_url, pipeline_id, job_id)
     r = requests.get(url, cookies=c)
-    return r.json()[unicode(job_id)][2]
+    return r.json()[str(job_id)][2]
 
 state = poll_for_state()
 while not state == "done":
@@ -71,7 +71,7 @@ while not state == "done":
 r = requests.get('%s/execution/%s/logs/%s' % (base_url, job_id, last_log_line),
                  cookies=c)
 print("Follow up logs")
-for log_id, log in r.json().iteritems():
+for log_id, log in r.json().items():
     last_log_line = log_id
     print(log)
 
@@ -79,4 +79,4 @@ for log_id, log in r.json().iteritems():
 r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
                  cookies=c)
 r.json()
-assert "output1.txt" in os.listdir(r.json()[unicode(job_id)][1])
+assert "output1.txt" in os.listdir(r.json()[str(job_id)][1])
