@@ -13,11 +13,17 @@
         - python3-dev
         - libffi-dev
         - rabbitmq-server
-        - python3-pip
   
     - name: install docker
       shell: wget -qO- https://get.docker.com/ | sh
+      args:
+        creates: /usr/bin/docker
       
+    - name: install pip
+      shell: wget -qO- https://bootstrap.pypa.io/get-pip.py | python
+      args:
+        creates: /usr/local/bin/pip3
+
     - name: add user in docker group
       user: name={{ansible_ssh_user}} groups=docker append=yes
       
@@ -25,4 +31,8 @@
       command: pip3 install -r /vagrant/requirements.txt
       
     - name: run docker registry
-      command: docker run -d -p 7900:5000 registry
+      lineinfile:
+        dest=/etc/rc.local
+        regexp=^docker
+        insertbefore=^exit
+        line="docker run -d -p 7900:5000 registry"
