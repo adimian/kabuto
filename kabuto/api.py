@@ -1,3 +1,4 @@
+from io import BytesIO
 import datetime
 import json
 import logging
@@ -11,7 +12,6 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_required, login_user, current_user
 from flask_restful import reqparse
 from flask_sqlalchemy import SQLAlchemy
-from io import BytesIO
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.exc import NoResultFound
 from werkzeug.datastructures import FileStorage
@@ -20,7 +20,7 @@ import flask_restful as restful
 import pika
 
 from mailer import send_token
-
+from utils import put_in_message_queue
 
 class ProtectedResource(restful.Resource):
     method_decorators = [login_required]
@@ -40,23 +40,6 @@ def get_remote_ip():
     return request.environ.get('HTTP_X_REAL_IP') or \
         request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
 
-
-def put_in_message_queue(queue, message):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(
-        host=app.config['AMQP_HOSTNAME']))
-    channel = connection.channel()
-    channel.queue_declare(queue=queue, durable=True)
-
-    properties = pika.BasicProperties(delivery_mode=2,)
-    channel.basic_publish(exchange='',
-                          routing_key=queue,
-                          body=message,
-                          properties=properties)
-    connection.close()
-
-
-def publish_job(message):
-    put_in_message_queue(queue='jobs', message=message)
 
 
 def get_docker_client():
