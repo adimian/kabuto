@@ -18,7 +18,7 @@ def send_mail(recipient, subject, content):
     author = current_app.config['MAIL_AUTHOR']
     sender = current_app.config['MAIL_SENDER_ADDRESS']
     sender_pw = current_app.config['MAIL_SENDER_PW']
-    mail_server = current_app.config['MAIL_SERVER']
+
 
     msg = MIMEText(content, 'html')
     msg.set_unixfrom(author)
@@ -27,7 +27,8 @@ def send_mail(recipient, subject, content):
     msg['Subject'] = subject
     msg.add_header('reply-to', "info@adimian.com")
 
-    server = smtplib.SMTP(mail_server)
+    server = smtplib.SMTP(current_app.config['SMTP_SERVER'],
+                          current_app.config['SMTP_PORT'])
     try:
         server.set_debuglevel(True)
         server.ehlo()
@@ -36,8 +37,8 @@ def send_mail(recipient, subject, content):
         if server.has_extn('STARTTLS'):
             server.starttls()
             server.ehlo()  # re-identify ourselves over TLS connection
-
-        server.login(sender, sender_pw)
+        if sender and sender_pw:
+            server.login(sender, sender_pw)
         server.sendmail(sender, [recipient], msg.as_string())
     finally:
         server.quit()

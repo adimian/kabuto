@@ -425,7 +425,23 @@ api.add_resource(LogWithdrawal,
                  '/execution/<string:job_id>/logs/<string:last_id>')
 
 if __name__ == '__main__':
-    app.config.from_object('config.Config')
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(
+        description='Kabuto restful API',
+    )
+    parser.add_argument(
+        'mode', nargs='?', default='prod', help='dev or prod')
+    args = parser.parse_args()
+    mode = args.mode
+    logger.info('Kabuto started in %s mode' % mode)
+    if mode == 'prod':
+        app.config.from_object('config.Config')
+    elif mode == 'dev':
+        app.config.from_object('config.TestingConfig')
+    else:
+        exit('Mode %s unknown' % mode)
+
     db.create_all()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])
