@@ -19,7 +19,7 @@ import docker
 import flask_restful as restful
 import pika
 
-from .mailer import send_token
+from mailer import send_token
 
 
 class ProtectedResource(restful.Resource):
