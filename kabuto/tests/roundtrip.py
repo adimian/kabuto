@@ -1,5 +1,6 @@
 '''
-This test relies on the fact that both kabuto and ammonite services are running standalone
+This test relies on the fact that both kabuto and ammonite
+services are running standalone
 '''
 import requests
 import os
@@ -20,16 +21,16 @@ r = requests.post('%s/image' % base_url,
                  data={'dockerfile': sample_dockerfile,
                        'name': 'hellozeworld'},
                   cookies=c)
-print r
-print r.json
+print(r)
+print(r.json())
 image_id = r.json()['id']
-print "created image"
+print("created image")
 
 r = requests.post('%s/pipeline' % base_url,
                  data={'name': 'my first pipeline'},
                  cookies=c)
 pipeline_id = r.json()['id']
-print "created pipeline"
+print("created pipeline")
 
 data['image_id'] = image_id
 r = requests.post('%s/pipeline/%s/job' % (base_url, pipeline_id),
@@ -38,21 +39,21 @@ r = requests.post('%s/pipeline/%s/job' % (base_url, pipeline_id),
                   cookies=c)
 
 job_id = r.json()['id']
-print "created job"
+print("created job")
 
 r = requests.post('%s/pipeline/%s/submit' % (base_url, pipeline_id),
                   cookies=c)
-print "submitted job with following executions:"
+print("submitted job with following executions:")
 for eid, state in r.json().iteritems():
-    print "id: %s - state(%s)" % (eid, state)
+    print("id: %s - state(%s)" % (eid, state))
 
 r = requests.get('%s/execution/%s/logs' % (base_url, job_id),
                  cookies=c)
-print "Initial logs"
+print("Initial logs")
 last_log_line = -1
 for log_id, log in r.json().iteritems():
     last_log_line = log_id
-    print log
+    print(log)
 
 
 def poll_for_state():
@@ -62,17 +63,17 @@ def poll_for_state():
 
 state = poll_for_state()
 while not state == "done":
-    print "state is %s" % state
-    print "polling..."
+    print("state is %s" % state)
+    print("polling...")
     state = poll_for_state()
     time.sleep(1)
 
 r = requests.get('%s/execution/%s/logs/%s' % (base_url, job_id, last_log_line),
                  cookies=c)
-print "Follow up logs"
+print("Follow up logs")
 for log_id, log in r.json().iteritems():
     last_log_line = log_id
-    print log
+    print(log)
 
 
 r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
