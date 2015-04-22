@@ -20,7 +20,7 @@ import flask_restful as restful
 import pika
 
 from mailer import send_token
-from utils import put_in_message_queue, publish_job
+from utils import publish_job
 
 class ProtectedResource(restful.Resource):
     method_decorators = [login_required]
@@ -273,9 +273,10 @@ class Submitter(ProtectedResource):
     def post(self, pipeline_id):
         pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
         jobs = []
+        host = app.config['AMQP_HOSTNAME']
         for job in pipeline.jobs:
             jobs.append(job)
-            publish_job(message=job.serialize())
+            publish_job(host, message=job.serialize())
 
         return dict([(jb.id, jb.state) for jb in jobs])
 
