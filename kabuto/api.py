@@ -20,7 +20,7 @@ import flask_restful as restful
 import pika
 
 from mailer import send_token
-from utils import put_in_message_queue
+from utils import put_in_message_queue, publish_job
 
 class ProtectedResource(restful.Resource):
     method_decorators = [login_required]
