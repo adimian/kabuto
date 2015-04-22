@@ -10,8 +10,7 @@ def open_channel(host):
     yield channel
     connection.close()
 
-def put_in_message_queue(queue, message):
-    host = app.config['AMQP_HOSTNAME']
+def put_in_message_queue(host, queue, message):
     with open_channel(host) as channel:
         channel.queue_declare(queue=queue, durable=True)
         properties = pika.BasicProperties(delivery_mode=2,)
@@ -20,5 +19,5 @@ def put_in_message_queue(queue, message):
                               body=message,
                               properties=properties)
 
-def publish_job(message):
-    put_in_message_queue(queue='jobs', message=message)
+def publish_job(host, message):
+    put_in_message_queue(host, queue='jobs', message=message)
