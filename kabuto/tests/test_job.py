@@ -1,8 +1,10 @@
 from kabuto.tests import sample_dockerfile
 from kabuto.tests.conftest import preload
-from kabuto.api import Job
+from kabuto.api import Job, Image, Pipeline, db
 import json
 import os
+import zipfile
+from io import BytesIO
 
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
@@ -75,3 +77,34 @@ def test_get_details(client):
     assert jobs.get(str(jid2))
     assert jobs[str(jid2)]["image"]["id"] == iid2
     assert jobs[str(jid2)]["pipeline"]["id"] == pid2
+
+
+def test_download_result(authenticated_client):
+    pipeline = Pipeline.query.all()[0]
+    image = Image.query.all()[0]
+    job = Job(pipeline, image, "", "")
+    db.session.add(job)
+    db.session.commit()
+    with open(os.path.join(job.results_path, "results.txt"), "w") as fh:
+        fh.write("some results")
+
+    result_url = '/pipeline/%s/job/%s?result' % (job.pipeline_id, job.id)
+    rv = authenticated_client.get(result_url)
+    assert rv.status_code == 200
+    print(rv.data)
+    result = json.loads(rv.data.decode('utf-8'))
+    assert list(result.keys()) == ["error"]
+
+    job.state = "done"
+    db.session.add(job)
+    db.session.commit()
+    result_url = '/pipeline/%s/job/%s?result' % (job.pipeline_id, job.id)
+    rv = authenticated_client.get(result_url)
+    assert rv.status_code == 200
+    expected_file = "results.txt"
+    print(rv.data)
+    zp = zipfile.ZipFile(BytesIO(rv.data))
+    il = zp.infolist()
+    assert len(il) == 1
+    for zf in il:
+        assert zf.filename in expected_file

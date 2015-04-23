@@ -224,6 +224,17 @@ def prepare_entity_dict(entity, entity_id, **kwargs):
     return entity_dict
 
 
+def get_folder_as_zip(zip_name, folder_to_zip):
+    zip_file = "%s.zip" % os.path.join(tempfile.mkdtemp(),
+                                       zip_name)
+    zipf = zipfile.ZipFile(zip_file, 'w')
+    zipdir(folder_to_zip, zipf,
+           root_folder=folder_to_zip)
+    zipf.close()
+    print(zip_file)
+    return zip_file
+
+
 class Login(restful.Resource):
     def post(self):
         parser = reqparse.RequestParser()
@@ -288,6 +299,20 @@ class Pipelines(ProtectedResource):
 
 class Jobs(ProtectedResource):
     def get(self, pipeline_id=None, job_id=None):
+        parser = reqparse.RequestParser()
+        parser.add_argument('result', default=False)
+        args = parser.parse_args()
+        if (not args['result'] is False) and job_id:
+            job = Job.query.filter_by(id=job_id).one()
+            if not job.state == "done":
+                return {"error": "Job has not finished running, or has failed"}
+            try:
+                z_file = get_folder_as_zip("results", job.results_path)
+                return send_file(z_file,
+                                 as_attachment=True,
+                                 attachment_filename=os.path.basename(z_file))
+            except Exception:
+                return {"error": "Something went wrong, contact your admin"}
         return prepare_entity_dict([Job, Pipeline], job_id)
 
     def post(self, pipeline_id):
@@ -361,11 +386,7 @@ class Attachment(restful.Resource):
             logging.info(msg % (get_remote_ip(), token))
             abort(404)
         try:
-            zip_file = "%s.zip" % os.path.join(tempfile.mkdtemp(), token)
-            zipf = zipfile.ZipFile(zip_file, 'w')
-            zipdir(job.attachments_path, zipf,
-                   root_folder=job.attachments_path)
-            zipf.close()
+            zip_file = get_folder_as_zip(token, job.attachments_path)
             # We'll assume that the job started running
             # when the attachments are downloaded
             job.state = "running"

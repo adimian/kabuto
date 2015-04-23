@@ -20,7 +20,7 @@
         creates: /usr/bin/docker
 
     - name: install pip
-      shell: wget -qO- https://bootstrap.pypa.io/get-pip.py | python
+      shell: wget -qO- https://bootstrap.pypa.io/get-pip.py | python3
       args:
         creates: /usr/local/bin/pip3
 
