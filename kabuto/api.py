@@ -200,9 +200,9 @@ class ExecutionLog(db.Model):
 
 
 @login_manager.user_loader
-def load_user(username):
+def load_user(login):
     try:
-        user = User.query.filter_by(login=username).one()
+        user = User.query.filter_by(login=login).one()
     except NoResultFound:
         return None
     return user
@@ -434,12 +434,12 @@ class Register(restful.Resource):
 
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('username', type=str, required=True)
+        parser.add_argument('login', type=str, required=True)
         parser.add_argument('password', type=str, required=True)
         parser.add_argument('email', type=str, required=True)
         args = parser.parse_args()
 
-        user = User(login=args['username'],
+        user = User(login=args['login'],
                     password=args['password'],
                     email=args['email'])
         user.token = str(uuid.uuid4())

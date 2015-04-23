@@ -101,7 +101,7 @@ CMD ["echo", "hello world"]
 '''
 
 if args.normal:
-    data = {'command': ['cp /inbox/file1.txt /outbox/output1.txt', "ll"]}
+    data = {'command': ['cp /inbox/file1.txt /outbox/output1.txt']}
     files = [("attachments", open(os.path.join(ROOT_DIR,
                                                "data", "file1.txt"), "rb")),
              ("attachments", open(os.path.join(ROOT_DIR,
