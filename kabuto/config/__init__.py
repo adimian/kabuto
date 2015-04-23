@@ -7,14 +7,15 @@ class Config(object):
     CSRF_ENABLED = True
     SECRET_KEY = 'you-will-never-get-me'
     AMQP_HOSTNAME = 'localhost'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///kabuto.db'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/kabuto.db'
     DOCKER_CLIENT = 'unix://var/run/docker.sock'
     DOCKER_REGISTRY_URL = 'localhost:7900'
     DOCKER_REGISTRY_INSECURE = True
     DOCKER_LOGIN = ""
     DOCKER_PASSWORD = ""
-    SMTP_SERVER = ''
-    SMTP_PORT = ''
+    # python -m smtpd -c DebuggingServer -n localhost:2525
+    SMTP_SERVER = 'localhost'
+    SMTP_PORT = 2525
     MAIL_AUTHOR = ''
     MAIL_SENDER_ADDRESS = ''
     MAIL_SENDER_PW = ''
@@ -23,7 +24,4 @@ class Config(object):
 class TestingConfig(Config):
     DEBUG = True
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/test.db'
-    # python -m smtpd -c DebuggingServer -n localhost:2525
-    SMTP_SERVER = 'localhost'
-    SMTP_PORT = 2525
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///'
