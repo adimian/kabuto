@@ -172,11 +172,13 @@ class Job(db.Model):
     def as_dict(self):
         return {"id": self.id,
                 "command": self.command,
+                "state": self.state,
                 "creation_date": self.creation_date.strftime("%d %m %Y"),
                 "used_cpu": self.used_cpu,
                 "used_memory": self.used_memory,
                 "used_io": self.used_io,
                 "attachment_token": self.attachments_token,
+                "results_path": self.results_path,
                 "image": {"id": self.image_id},
                 "pipeline": {"id": self.pipeline_id}}
 
