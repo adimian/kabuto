@@ -206,7 +206,16 @@ def load_user(username):
     return user
 
 
-def prepare_entity_dict(entity_list, entity_id=None):
+def prepare_entity_dict(entity, entity_id, **kwargs):
+    kwargs["owner"] = current_user
+    if entity_id:
+        kwargs["id"] = entity_id
+    if isinstance(entity, list):
+        base_class, join_class = entity
+        query = db.session.query(base_class).join(join_class)
+        entity_list = query.filter_by(**kwargs).all()
+    else:
+        entity_list = entity.query.filter_by(**kwargs).all()
     entity_dict = {}
     for entity in entity_list:
         entity_dict[entity.id] = entity.as_dict()
@@ -230,8 +239,7 @@ class Login(restful.Resource):
 
 class Images(ProtectedResource):
     def get(self, image_id=None):
-        images = Image.query.filter_by(owner=current_user).all()
-        return prepare_entity_dict(images, image_id)
+        return prepare_entity_dict(Image, image_id)
 
     def post(self):
         parser = reqparse.RequestParser()
@@ -261,11 +269,7 @@ class Images(ProtectedResource):
 
 class Pipelines(ProtectedResource):
     def get(self, pipeline_id=None):
-        filt = {"owner": current_user}
-        if pipeline_id:
-            filt["id"] = pipeline_id
-        pipelines = Pipeline.query.filter_by(**filt).all()
-        return prepare_entity_dict(pipelines, pipeline_id)
+        return prepare_entity_dict(Pipeline, pipeline_id)
 
     def post(self):
         parser = reqparse.RequestParser()
@@ -282,16 +286,7 @@ class Pipelines(ProtectedResource):
 
 class Jobs(ProtectedResource):
     def get(self, pipeline_id=None, job_id=None):
-        print(pipeline_id, job_id)
-        filt = {"owner": current_user}
-        if job_id:
-            filt["id"] = job_id
-        jobs = db.session.query(Job).join(Pipeline).filter_by(**filt).all()
-        entity_dict = {}
-        for entity in jobs:
-            entity_dict[entity.id] = entity.as_dict()
-        print(entity_dict)
-        return entity_dict
+        return prepare_entity_dict([Job, Pipeline], job_id)
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
