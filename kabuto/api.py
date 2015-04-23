@@ -22,6 +22,7 @@ import pika
 from mailer import send_token
 from utils import publish_job
 
+
 class ProtectedResource(restful.Resource):
     method_decorators = [login_required]
 
@@ -39,7 +40,6 @@ logger.level = logging.DEBUG
 def get_remote_ip():
     return request.environ.get('HTTP_X_REAL_IP') or \
         request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
-
 
 
 def get_docker_client():
@@ -103,6 +103,12 @@ class Image(db.Model):
         self.name = name
         self.owner = owner
 
+    def as_dict(self):
+        return {"id": self.id,
+                "name": self.name,
+                "dockerfile": self.dockerfile,
+                "creation_date": self.creation_date.strftime("%d %m %Y")}
+
 
 class Pipeline(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -116,6 +122,13 @@ class Pipeline(db.Model):
     def __init__(self, name, owner):
         self.name = name
         self.owner = owner
+
+    def as_dict(self):
+        jobs = [{"id": j.id} for j in Job.query.filter_by(pipeline=self)]
+        return {"id": self.id,
+                "name": self.name,
+                "creation_date": self.creation_date.strftime("%d %m %Y"),
+                "jobs": jobs}
 
 
 class Job(db.Model):
@@ -156,6 +169,17 @@ class Job(db.Model):
                            'attachment_token': self.attachments_token,
                            'result_token': self.results_token})
 
+    def as_dict(self):
+        return {"id": self.id,
+                "command": self.command,
+                "creation_date": self.creation_date.strftime("%d %m %Y"),
+                "used_cpu": self.used_cpu,
+                "used_memory": self.used_memory,
+                "used_io": self.used_io,
+                "attachment_token": self.attachments_token,
+                "image": {"id": self.image_id},
+                "pipeline": {"id": self.pipeline_id}}
+
 
 class ExecutionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -167,6 +191,11 @@ class ExecutionLog(db.Model):
         self.execution = execution
         self.logline = line
 
+    def as_dict(self):
+        return {"id": self.id,
+                "job": self.job_id,
+                "logline": self.logline}
+
 
 @login_manager.user_loader
 def load_user(username):
@@ -175,6 +204,13 @@ def load_user(username):
     except NoResultFound:
         return None
     return user
+
+
+def prepare_entity_dict(entity_list, entity_id=None):
+    entity_dict = {}
+    for entity in entity_list:
+        entity_dict[entity.id] = entity.as_dict()
+    return entity_dict
 
 
 class Login(restful.Resource):
@@ -193,6 +229,10 @@ class Login(restful.Resource):
 
 
 class Images(ProtectedResource):
+    def get(self, image_id=None):
+        images = Image.query.filter_by(owner=current_user).all()
+        return prepare_entity_dict(images, image_id)
+
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('dockerfile', type=str, required=True)
@@ -220,9 +260,12 @@ class Images(ProtectedResource):
 
 
 class Pipelines(ProtectedResource):
-    def get(self):
-        pipelines = Pipeline.query.filter_by(owner=current_user).all()
-        return dict([(p.id, p.name) for p in pipelines])
+    def get(self, pipeline_id=None):
+        filt = {"owner": current_user}
+        if pipeline_id:
+            filt["id"] = pipeline_id
+        pipelines = Pipeline.query.filter_by(**filt).all()
+        return prepare_entity_dict(pipelines, pipeline_id)
 
     def post(self):
         parser = reqparse.RequestParser()
@@ -238,11 +281,17 @@ class Pipelines(ProtectedResource):
 
 
 class Jobs(ProtectedResource):
-    def get(self, pipeline_id, job_id):
-        jobs = Job.query.filter_by(id=job_id).all()
-        re = dict([(p.id, (p.attachments_path,
-                           p.results_path, p.state)) for p in jobs])
-        return re
+    def get(self, pipeline_id=None, job_id=None):
+        print(pipeline_id, job_id)
+        filt = {"owner": current_user}
+        if job_id:
+            filt["id"] = job_id
+        jobs = db.session.query(Job).join(Pipeline).filter_by(**filt).all()
+        entity_dict = {}
+        for entity in jobs:
+            entity_dict[entity.id] = entity.as_dict()
+        print(entity_dict)
+        return entity_dict
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
@@ -393,6 +442,8 @@ class Register(restful.Resource):
         db.session.commit()
         send_token(args['email'], user, user.token,
                    url_root=request.url_root[:-1])
+        return {"status": "success",
+                "token": user.token}
 
 
 class HelloWorld(ProtectedResource):
@@ -411,6 +462,7 @@ api.add_resource(Pipelines,
                  '/pipeline',
                  '/pipeline/<string:pipeline_id>')
 api.add_resource(Jobs,
+                 '/jobs',
                  '/pipeline/<string:pipeline_id>/job',
                  '/pipeline/<string:pipeline_id>/job/<string:job_id>')
 api.add_resource(Submitter,

@@ -13,9 +13,10 @@ def client():
     app.config.from_object('kabuto.config.TestingConfig')
     db.create_all()
     try:
-        user = User.query.filter_by(login='me').one()
+        User.query.filter_by(login='me').one()
     except NoResultFound:
         db.session.add(User('me', 'Secret', 'test@test.com'))
+        db.session.add(User('me1', 'Secret', 'test1@test.com'))
         db.session.commit()
     client = app.test_client()
     return client
@@ -63,3 +64,4 @@ def preload(client, data):
                      data=data)
     job_id = json.loads(rv.data.decode('utf-8'))['id']
     assert job_id is not None
+    return image_id, pipeline_id, job_id

@@ -23,7 +23,7 @@ class Config(object):
 class TestingConfig(Config):
     DEBUG = True
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/test.db'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///'
     # python -m smtpd -c DebuggingServer -n localhost:2525
     SMTP_SERVER = 'localhost'
     SMTP_PORT = 2525
