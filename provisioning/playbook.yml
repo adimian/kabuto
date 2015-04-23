@@ -57,9 +57,7 @@
       when: rabbitmq_users.stdout.find('\nkabuto') == -1
 
     - name: Set kabuto permissions
-      shell: rabbitmqctl set_permissions kabuto "jobs" "jobs" "jobs"
-      # rabbitmqctl set_permissions kabuto "^(amp.default|jobs)$" "amq.default" "job"
-
+      shell: rabbitmqctl set_permissions kabuto "^(amp.default|jobs)$" "amq.default" "job"
     - name: Add ammonite user on rabbitmq
       shell: rabbitmqctl add_user ammonite ammonite
       when: rabbitmq_users.stdout.find('\nammonite') == -1

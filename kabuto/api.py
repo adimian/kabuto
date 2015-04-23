@@ -321,7 +321,7 @@ class Submitter(ProtectedResource):
         jobs = []
         for job in pipeline.jobs:
             jobs.append(job)
-            publish_job(message=job.serialize(), app.config)
+            publish_job(job.serialize(), app.config)
             job.state = "in_queue"
             db.session.add(job)
             db.session.commit()
