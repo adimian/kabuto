@@ -22,6 +22,7 @@ base_url = "http://127.0.0.1:5000"
 def do_a_barrel_roll(data, files, base_url, dockerfile, dockername, file_name):
     r = requests.post('%s/login' % base_url, data={'login': 'maarten',
                                                    'password': 'test'})
+    assert r.status_code == 200
     c = r.cookies
 
     r = requests.post('%s/image' % base_url,
@@ -64,7 +65,7 @@ def do_a_barrel_roll(data, files, base_url, dockerfile, dockername, file_name):
     def poll_for_state():
         url = "%s/pipeline/%s/job/%s" % (base_url, pipeline_id, job_id)
         r = requests.get(url, cookies=c)
-        return r.json()[str(job_id)][2]
+        return r.json()[str(job_id)]["state"]
 
     state = poll_for_state()
     while not state == "done":
@@ -84,8 +85,7 @@ def do_a_barrel_roll(data, files, base_url, dockerfile, dockername, file_name):
 
     r = requests.get('%s/pipeline/%s/job/%s' % (base_url, pipeline_id, job_id),
                      cookies=c)
-    r.json()
-    assert file_name in os.listdir(r.json()[str(job_id)][1])
+    assert file_name in os.listdir(r.json()[str(job_id)]["results_path"])
 
 sample_dockerfile = '''FROM busybox
 CMD ["echo", "hello world"]
@@ -101,12 +101,13 @@ CMD ["echo", "hello world"]
 '''
 
 if args.normal:
-    data = {'command': ['cp /inbox/file1.txt /outbox/output1.txt', "ll"]}
+    data = {'command': ['cp /inbox/file1.txt /outbox/output1.txt']}
     files = [("attachments", open(os.path.join(ROOT_DIR,
                                                "data", "file1.txt"), "rb")),
              ("attachments", open(os.path.join(ROOT_DIR,
                                                "data", "file2.txt"), "rb"))]
-    do_a_barrel_roll(data, files, base_url, sample_dockerfile, 'hellozeworld')
+    do_a_barrel_roll(data, files, base_url, sample_dockerfile,
+                     'hellozeworld', 'output1.txt')
 elif args.cpu:
     data = {'command': ["timeout 30 yes && echo done > /outbox/done.txt"]}
     files = []

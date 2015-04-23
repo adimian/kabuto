@@ -172,11 +172,13 @@ class Job(db.Model):
     def as_dict(self):
         return {"id": self.id,
                 "command": self.command,
+                "state": self.state,
                 "creation_date": self.creation_date.strftime("%d %m %Y"),
                 "used_cpu": self.used_cpu,
                 "used_memory": self.used_memory,
                 "used_io": self.used_io,
                 "attachment_token": self.attachments_token,
+                "results_path": self.results_path,
                 "image": {"id": self.image_id},
                 "pipeline": {"id": self.pipeline_id}}
 
@@ -198,15 +200,24 @@ class ExecutionLog(db.Model):
 
 
 @login_manager.user_loader
-def load_user(username):
+def load_user(login):
     try:
-        user = User.query.filter_by(login=username).one()
+        user = User.query.filter_by(login=login).one()
     except NoResultFound:
         return None
     return user
 
 
-def prepare_entity_dict(entity_list, entity_id=None):
+def prepare_entity_dict(entity, entity_id, **kwargs):
+    kwargs["owner"] = current_user
+    if entity_id:
+        kwargs["id"] = entity_id
+    if isinstance(entity, list):
+        base_class, join_class = entity
+        query = db.session.query(base_class).join(join_class)
+        entity_list = query.filter_by(**kwargs).all()
+    else:
+        entity_list = entity.query.filter_by(**kwargs).all()
     entity_dict = {}
     for entity in entity_list:
         entity_dict[entity.id] = entity.as_dict()
@@ -230,8 +241,7 @@ class Login(restful.Resource):
 
 class Images(ProtectedResource):
     def get(self, image_id=None):
-        images = Image.query.filter_by(owner=current_user).all()
-        return prepare_entity_dict(images, image_id)
+        return prepare_entity_dict(Image, image_id)
 
     def post(self):
         parser = reqparse.RequestParser()
@@ -261,11 +271,7 @@ class Images(ProtectedResource):
 
 class Pipelines(ProtectedResource):
     def get(self, pipeline_id=None):
-        filt = {"owner": current_user}
-        if pipeline_id:
-            filt["id"] = pipeline_id
-        pipelines = Pipeline.query.filter_by(**filt).all()
-        return prepare_entity_dict(pipelines, pipeline_id)
+        return prepare_entity_dict(Pipeline, pipeline_id)
 
     def post(self):
         parser = reqparse.RequestParser()
@@ -282,16 +288,7 @@ class Pipelines(ProtectedResource):
 
 class Jobs(ProtectedResource):
     def get(self, pipeline_id=None, job_id=None):
-        print(pipeline_id, job_id)
-        filt = {"owner": current_user}
-        if job_id:
-            filt["id"] = job_id
-        jobs = db.session.query(Job).join(Pipeline).filter_by(**filt).all()
-        entity_dict = {}
-        for entity in jobs:
-            entity_dict[entity.id] = entity.as_dict()
-        print(entity_dict)
-        return entity_dict
+        return prepare_entity_dict([Job, Pipeline], job_id)
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()
@@ -324,7 +321,10 @@ class Submitter(ProtectedResource):
         jobs = []
         for job in pipeline.jobs:
             jobs.append(job)
-            publish_job(job.serialize(), app.config)
+            publish_job(message=job.serialize(), app.config)
+            job.state = "in_queue"
+            db.session.add(job)
+            db.session.commit()
 
         return dict([(jb.id, jb.state) for jb in jobs])
 
@@ -366,6 +366,11 @@ class Attachment(restful.Resource):
             zipdir(job.attachments_path, zipf,
                    root_folder=job.attachments_path)
             zipf.close()
+            # We'll assume that the job started running
+            # when the attachments are downloaded
+            job.state = "running"
+            db.session.add(job)
+            db.session.commit()
             return send_file(zip_file,
                              as_attachment=True,
                              attachment_filename=os.path.basename(zip_file))
@@ -428,12 +433,12 @@ class Register(restful.Resource):
 
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('username', type=str, required=True)
+        parser.add_argument('login', type=str, required=True)
         parser.add_argument('password', type=str, required=True)
         parser.add_argument('email', type=str, required=True)
         args = parser.parse_args()
 
-        user = User(login=args['username'],
+        user = User(login=args['login'],
                     password=args['password'],
                     email=args['email'])
         user.token = str(uuid.uuid4())

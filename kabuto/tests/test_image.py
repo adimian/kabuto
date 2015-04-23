@@ -34,3 +34,12 @@ def test_get_details(client):
     assert sorted(images[id2].keys()) == sorted(["id", "name", "creation_date",
                                                  "dockerfile"])
     assert images[id2]['name'] == name2
+
+    rv = client.get("/image/%s" % id2)
+    images = json.loads(rv.data.decode('utf-8'))
+
+    assert not images.get(id1)
+    assert images.get(id2)
+    assert sorted(images[id2].keys()) == sorted(["id", "name", "creation_date",
+                                                 "dockerfile"])
+    assert images[id2]['name'] == name2
