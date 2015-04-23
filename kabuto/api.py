@@ -321,6 +321,9 @@ class Submitter(ProtectedResource):
         for job in pipeline.jobs:
             jobs.append(job)
             publish_job(host, message=job.serialize())
+            job.state = "in_queue"
+            db.session.add(job)
+            db.session.commit()
 
         return dict([(jb.id, jb.state) for jb in jobs])
 
@@ -362,6 +365,11 @@ class Attachment(restful.Resource):
             zipdir(job.attachments_path, zipf,
                    root_folder=job.attachments_path)
             zipf.close()
+            # We'll assume that the job started running
+            # when the attachments are downloaded
+            job.state = "running"
+            db.session.add(job)
+            db.session.commit()
             return send_file(zip_file,
                              as_attachment=True,
                              attachment_filename=os.path.basename(zip_file))
