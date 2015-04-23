@@ -2,10 +2,10 @@
 - hosts: all
   sudo: True
   tasks:
-  
+
     - name: update hostname
       hostname: name=kabuto
-  
+
     - name: install deps
       apt: name={{item}} state=latest update_cache=yes
       with_items:
@@ -13,12 +13,12 @@
         - python3-dev
         - libffi-dev
         - rabbitmq-server
-  
+
     - name: install docker
       shell: wget -qO- https://get.docker.com/ | sh
       args:
         creates: /usr/bin/docker
-      
+
     - name: install pip
       shell: wget -qO- https://bootstrap.pypa.io/get-pip.py | python
       args:
@@ -26,13 +26,43 @@
 
     - name: add user in docker group
       user: name={{ansible_ssh_user}} groups=docker append=yes
-      
+
     - name: install pip deps
       command: pip3 install -r /vagrant/requirements.txt
-      
+
     - name: run docker registry
       lineinfile:
         dest=/etc/rc.local
         regexp=^docker
         insertbefore=^exit
         line="docker run -d -p 7900:5000 registry"
+
+    - name: List rabbitmq users
+      shell: rabbitmqctl list_users
+      register: rabbitmq_users
+
+    - name: Add admin user on rabbitmq
+      shell: rabbitmqctl add_user admin admin
+      when: rabbitmq_users.stdout.find('\nadmin') == -1
+
+    - name: Add administrator tag to admin
+      shell: rabbitmqctl set_user_tags admin administrator
+
+    - name: Drop guest account
+      shell: rabbitmqctl delete_user guest
+      when: rabbitmq_users.stdout.find('\nguest') != -1
+
+    - name: Add kabuto user on rabbitmq
+      shell: rabbitmqctl add_user kabuto kabuto
+      when: rabbitmq_users.stdout.find('\nkabuto') == -1
+
+    - name: Set kabuto permissions
+      shell: rabbitmqctl set_permissions kabuto "jobs" "jobs" "jobs"
+      # rabbitmqctl set_permissions kabuto "^(amp.default|jobs)$" "amq.default" "job"
+
+    - name: Add ammonite user on rabbitmq
+      shell: rabbitmqctl add_user ammonite ammonite
+      when: rabbitmq_users.stdout.find('\nammonite') == -1
+
+    - name: Set ammonite permissions
+      shell: rabbitmqctl set_permissions ammonite "jobs" "jobs" "jobs"

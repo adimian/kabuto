@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 
 from utils import open_channel
 from config import Config
-
+config_dict = vars(Config)
 
 INFO_TPL = '''Info for "%s" queue:
 Number of consumers: %s
@@ -57,25 +57,25 @@ def help(action_name=None):
 @Action('queue name')
 def delete(queue_name):
     'Delete the given queue'
-    with open_channel(Config.AMQP_HOSTNAME) as channel:
+    with open_channel(config_dict) as channel:
         channel.queue_delete(queue_name)
 
 @Action('queue name')
 def purge(queue_name):
     'Purge the given queue'
-    with open_channel(Config.AMQP_HOSTNAME) as channel:
+    with open_channel(config_dict) as channel:
         channel.queue_purge(queue_name)
 
 @Action('queue name')
 def declare(queue_name):
     'Declare the given queue'
-    with open_channel(Config.AMQP_HOSTNAME) as channel:
+    with open_channel(config_dict) as channel:
         channel.queue_declare(queue=queue_name, durable=True)
 
 @Action('queue name')
 def info(queue_name):
     'Get info for the given queue'
-    with open_channel(Config.AMQP_HOSTNAME) as channel:
+    with open_channel(config_dict) as channel:
         info = channel.queue_declare(
             queue=queue_name,
             passive=True,

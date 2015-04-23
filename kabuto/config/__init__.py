@@ -7,6 +7,8 @@ class Config(object):
     CSRF_ENABLED = True
     SECRET_KEY = 'you-will-never-get-me'
     AMQP_HOSTNAME = 'localhost'
+    AMQP_USER = 'kabuto'
+    AMQP_PASSWORD = 'kabuto'
     SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/kabuto.db'
     DOCKER_CLIENT = 'unix://var/run/docker.sock'
     DOCKER_REGISTRY_URL = 'localhost:7900'

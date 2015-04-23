@@ -2,16 +2,28 @@ from contextlib import contextmanager
 
 import pika
 
+
 @contextmanager
-def open_channel(host):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(
-        host=host))
+def open_channel(config):
+    login = config['AMQP_USER']
+    password = config['AMQP_PASSWORD']
+    if login and password:
+        credentials = pika.PlainCredentials(login, password)
+    else:
+        credentials = None
+
+    host = config['AMQP_HOSTNAME']
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=host,
+            credentials=credentials,
+        ))
     channel = connection.channel()
     yield channel
     connection.close()
 
-def put_in_message_queue(host, queue, message):
-    with open_channel(host) as channel:
+def put_in_message_queue(queue, message, config):
+    with open_channel(config) as channel:
         channel.queue_declare(queue=queue, durable=True)
         properties = pika.BasicProperties(delivery_mode=2,)
         channel.basic_publish(exchange='',
@@ -19,5 +31,5 @@ def put_in_message_queue(host, queue, message):
                               body=message,
                               properties=properties)
 
-def publish_job(host, message):
-    put_in_message_queue(host, queue='jobs', message=message)
+def publish_job(message, config):
+    put_in_message_queue('jobs', message, config)
