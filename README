@@ -1,7 +1,218 @@
-Login
------
+Some general rules
+==================
+doing a POST request will generally create entities.
+doing a GET request will generally return info about the selected entity.
+
+In the python examples, a variable will be assigned a value in one example, 
+and then be assumed it is assigned the same way in later examples.
+This means, if you don't know the value of a certain variable in one example, 
+look for how it's done in previous examples.
+
+Job attachments are found under "/inbox/" in the container.
+Job results are to be saved under "/outbox/" in the container or they will be lost.
+
+Registering
+===========
+
+All api calls (apart from logging in) require you to be logged in. For this you will need to register an account.
+
+Required data
+-------------
+login: String
+password: String
+email: String
+
+Return value:
+-------------
+JSON: {"status": <value>, "token": <value>}
+
+curl example
+------------
+$ curl http://127.0.0.1:5000/register -X POST -d "login=me&password=SecreT&email=test@test.com"
+this will return a token, required to activate your account.
+$ curl http://127.0.0.1:5000/register/confirm/me/Th3T0KeNYoU4r3G1veN
+
+python example
+--------------
+import requests
+base_url = "http://127.0.0.1:5000"
+r = requests.post('%s/register' % base_url, data={'login': 'me',
+                                                  'password': 'SecreT',
+                                                  'email': 'test@test.com'})
+token = r.json()['token']
+r = requests.get('%s/register/confirm/me/%s' % (base_url, token))
+
+Loggin in
+=========
+
+You can log in by posting your credentials to the login url and saving the returned cookie.
+This cookie will identify you on the server and thus needs to be sent for every subsequent call made to the api.
+
+curl example
+------------
 $ curl http://127.0.0.1:5000/login -X POST -d "login=me&password=SecreT" -c /tmp/cookies.txt
 
-Subsequent queries
-------------------
-$ curl -b /tmp/cookies.txt  http://127.0.0.1:5000/
+python example
+--------------
+r = requests.post('%s/login' % base_url, data={'login': 'me',
+                                               'password': 'SecreT'})
+c = r.cookies
+
+Creating an Image
+=================
+
+An image is the api representation of a docker container. To make an image you will need to give it a name and the contents for a docker file.
+The contents of the docker file is a literal string, so spacing and newlines are important.
+The api will take care of creating and registering the docker image.
+
+required data
+-------------
+name: String
+dockerfile: Literal string
+
+Return value:
+-------------
+JSON {"id": <value>}
+
+curl example
+------------
+$ curl http://127.0.0.1:5000/image -X POST -d "name=test&dockerfile=@/path/to/some/docker_file" -b /tmp/cookies.txt
+
+Note how we include the cookies to tell the server it is me.
+
+python example
+--------------
+sample_dockerfile = '''FROM busybox
+CMD ["echo", "hello world"]
+'''
+r = requests.post('%s/image' % base_url,
+                      data={'dockerfile': sample_dockerfile,
+                            'name': 'test'},
+                      cookies=c)
+image_id = r.json()['id']
+
+retrieving image data
+---------------------
+Retrieving data can be done by doing a GET request to the following url
+http://127.0.0.1:5000/image/<string:image_id>
+
+Creating a Pipeline
+===================
+
+A Pipeline is exactly as it sounds, a pipeline for jobs (which we will discuss later). 
+Even though it is not implemented as such yet. The concept is first in, first out.
+To be able to execute jobs, we'll need a pipeline to put them in.
+The return value 
+
+required data
+-------------
+name: String
+
+Return value:
+-------------
+JSON {"id": <value>}
+
+curl example
+------------
+$ curl http://127.0.0.1:5000/pipeline -X POST -d "name=my_first_pipeline" -b /tmp/cookies.txt
+
+python example
+--------------
+r = requests.post('%s/pipeline' % base_url,
+                  data={'name': 'my first pipeline'},
+                  cookies=c)
+pipeline_id = r.json()['id']
+
+retrieving pipeline data
+---------------------
+Retrieving data can be done by doing a GET request to the following url
+http://127.0.0.1:5000/pipeline/<string:pipeline_id>
+
+Creating a Job
+==============
+
+Jobs are the actual real deal. 
+A job specifies the command that needs to be run on your container (Image in api terms) and the files needed while running this command.
+This means that you will be adding the files you need for a run to you POST request when making a job.
+Files uploaded this way will be copied to the "/inbox" path on the container. So if, in your command, you need to access the file "file1"
+you can retrieve it by entering "/inbox/file1" in your command or program you are running.
+Subsequently, you will need to save all your file results in the path "/outbox" or they will be lost.
+
+Note in the examples how we use the pipeline id, received from pipeline example, to associate the job to a pipeline.
+
+required data
+-------------
+command: String
+attachments: File(s)
+
+Return value:
+-------------
+JSON {"id": <value>}
+
+curl example
+------------
+$ http://127.0.0.1:5000/pipeline/<pipeline_id>/job -X POST -F attachments=@/path/to/file1 
+-F attachments=@/path/to/file2 -F image_id=<image_id> -F command="echo hello world" -b /tmp/cookies.txt
+
+python example
+--------------
+data = {'command': 'echo hello world',
+        'image_id': image_id}
+files = [("attachments", open("/path/to/file1"), "rb")),
+         ("attachments", open("/path/to/file2"), "rb"))]
+r = requests.post('%s/pipeline/%s/job' % (base_url, pipeline_id),
+                  data=data,
+                  files=files,
+                  cookies=c)
+
+job_id = r.json()['id']
+
+retrieving job data
+---------------------
+Retrieving data can be done by doing a GET request to the following url
+http://127.0.0.1:5000/pipeline/<string:pipeline_id>/job/<string:job_id>
+
+Submitting a pipeline
+=====================
+
+Once you've done all of the above, you can submit a pipeline.
+Submitting a pipeline runs the actual jobs associated to it.
+
+Return value:
+-------------
+JSON {<job_id>: <job_status>, <job_id>: <job_status>, ...}
+
+curl example
+------------
+$ curl http://127.0.0.1:5000/pipeline/<pipeline_id>/submit -X POST
+
+python example
+--------------
+r = requests.post('%s/pipeline/%s/submit' % (base_url, pipeline_id),
+                  cookies=c)
+for eid, state in r.json().items():
+    print("id: %s - state(%s)" % (eid, state))
+
+Requesting live logs
+====================
+
+While a run is taking place (this can be known by checking the state of a job by doing a GET request, it will have the state 'running'), 
+you can request the logs of this run. The return value is a collection of log lines.
+
+Return value:
+-------------
+JSON {<log_id>: <log_line>, <log_id>: <log_line>, ...}
+
+Request URL
+-----------
+http://127.0.0.1:5000/execution/<string:job_id>/logs
+
+If you want to build a polling system for the logs, but don't want to get all data all the time, you can give the last <log_id> to omit the previous
+log lines, and get only the new lines.
+
+http://127.0.0.1:5000/execution/<string:job_id>/logs/<string:log_id>
+
+Downloading your execution result files
+=======================================
+
+This feature is still under development
