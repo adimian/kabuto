@@ -19,7 +19,6 @@ def send_mail(recipient, subject, content):
     sender = current_app.config['MAIL_SENDER_ADDRESS']
     sender_pw = current_app.config['MAIL_SENDER_PW']
 
-
     msg = MIMEText(content, 'html')
     msg.set_unixfrom(author)
     msg['To'] = email.utils.formataddr(('Recipient', recipient))

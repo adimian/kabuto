@@ -1,5 +1,4 @@
 import json
-import time
 from kabuto.tests.conftest import preload
 
 
@@ -11,14 +10,12 @@ def test_create_pipeline(authenticated_client):
     assert pipeline_id is not None
 
 
-def test_submit_pipeline(preloaded_client):
-    rv = preloaded_client.get('/pipeline')
-    assert rv.status_code == 200
-    pipelines = json.loads(rv.data.decode('utf-8'))
+def test_submit_pipeline(client):
+    client.post('/login', data={'login': 'me',
+                                'password': 'Secret'})
+    _, pid1, _ = preload(client, {'command': 'echo hello world'})
 
-    first_pipeline = list(pipelines)[0]
-
-    rv = preloaded_client.post('/pipeline/%s/submit' % first_pipeline)
+    rv = client.post('/pipeline/%s/submit' % pid1)
     assert rv.status_code == 200
 
     submit_id = list(json.loads(rv.data.decode('utf-8')))[0]

@@ -91,7 +91,6 @@ def test_download_result(authenticated_client):
     result_url = '/pipeline/%s/job/%s?result' % (job.pipeline_id, job.id)
     rv = authenticated_client.get(result_url)
     assert rv.status_code == 200
-    print(rv.data)
     result = json.loads(rv.data.decode('utf-8'))
     assert list(result.keys()) == ["error"]
 
@@ -102,9 +101,15 @@ def test_download_result(authenticated_client):
     rv = authenticated_client.get(result_url)
     assert rv.status_code == 200
     expected_file = "results.txt"
-    print(rv.data)
     zp = zipfile.ZipFile(BytesIO(rv.data))
     il = zp.infolist()
     assert len(il) == 1
     for zf in il:
         assert zf.filename in expected_file
+
+    job.results_path = os.path.join(job.results_path, "does_not_exist")
+    db.session.add(job)
+    db.session.commit()
+    rv = authenticated_client.get(result_url)
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get("error", None)

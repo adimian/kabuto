@@ -27,3 +27,5 @@ class TestingConfig(Config):
     DEBUG = True
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///'
+    MAIL_SENDER_PW = 'test'
+    MAIL_SENDER_ADDRESS = 'test'

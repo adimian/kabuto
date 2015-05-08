@@ -201,7 +201,8 @@ you can request the logs of this run. The return value is a collection of log li
 
 Return value:
 -------------
-JSON {<log_id>: <log_line>, <log_id>: <log_line>, ...}
+JSON [{id: <log_id>, job:<job_id>, logline:<log_line>}, 
+      {id: <log_id>, job:<job_id>, logline:<log_line>}, ...}
 
 Request URL
 -----------

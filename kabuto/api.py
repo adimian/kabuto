@@ -189,8 +189,8 @@ class ExecutionLog(db.Model):
     job = db.relationship('Job', backref=db.backref('logs', lazy='dynamic'))
     logline = db.Column(db.Text)
 
-    def __init__(self, execution, line):
-        self.execution = execution
+    def __init__(self, job, line):
+        self.job = job
         self.logline = line
 
     def as_dict(self):
@@ -228,10 +228,11 @@ def get_folder_as_zip(zip_name, folder_to_zip):
     zip_file = "%s.zip" % os.path.join(tempfile.mkdtemp(),
                                        zip_name)
     zipf = zipfile.ZipFile(zip_file, 'w')
+    if not os.path.isdir(folder_to_zip):
+        raise Exception("%s is not a folder" % folder_to_zip)
     zipdir(folder_to_zip, zipf,
            root_folder=folder_to_zip)
     zipf.close()
-    print(zip_file)
     return zip_file
 
 
@@ -374,8 +375,8 @@ class LogWithdrawal(ProtectedResource):
     def get(self, job_id, last_id=None):
         logs = ExecutionLog.query.filter_by(job_id=job_id)
         if last_id:
-            logs.filter(ExecutionLog.id > last_id)
-        return dict([(log.id, log.logline) for log in logs])
+            logs = logs.filter(ExecutionLog.id > last_id).all()
+        return [log.as_dict() for log in logs]
 
 
 class Attachment(restful.Resource):

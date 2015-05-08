@@ -6,5 +6,7 @@ Flask-Login==0.2.11
 Flask-RESTful==0.3.2
 Flask-SQLAlchemy==2.0
 pytest
+pytest-cov==1.8.1
+mock==1.0.1
 requests==2.6.0
 python3-pika==0.9.14
