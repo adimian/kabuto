@@ -215,4 +215,9 @@ http://127.0.0.1:5000/execution/<string:job_id>/logs/<string:log_id>
 Downloading your execution result files
 =======================================
 
-This feature is still under development
+Getting the files produced by your run can be done by using the same url for retrieving job information,
+and by adding the parameter "result" to your url.
+
+http://127.0.0.1:5000/pipeline/<string:pipeline_id>/job/<string:job_id>?result
+
+Following this url will download a zip file containing all output files.
