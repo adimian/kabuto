@@ -5,15 +5,17 @@ import json
 import os
 import zipfile
 from io import BytesIO
+from unittest.mock import patch
 
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_create_job(authenticated_client):
-    rv = authenticated_client.post('/image',
-                                   data={'dockerfile': sample_dockerfile,
-                                         'name': 'hellozeworld'})
+    with patch('docker.Client'):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld'})
     assert rv.status_code == 200
     image_id = json.loads(rv.data.decode('utf-8'))['id']
 
@@ -30,9 +32,10 @@ def test_create_job(authenticated_client):
 
 
 def test_create_job_with_attachment(authenticated_client):
-    rv = authenticated_client.post('/image',
-                                   data={'dockerfile': sample_dockerfile,
-                                         'name': 'hellozeworld'})
+    with patch('docker.Client'):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld'})
     assert rv.status_code == 200
     image_id = json.loads(rv.data.decode('utf-8'))['id']
 

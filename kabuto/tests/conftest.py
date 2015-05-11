@@ -4,6 +4,7 @@ from kabuto.tests import sample_dockerfile
 from sqlalchemy.orm.exc import NoResultFound
 import json
 import os
+from unittest.mock import patch
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
@@ -50,18 +51,19 @@ def preloaded_client_with_attachments(authenticated_client):
 
 
 def preload(client, data):
-    rv = client.post('/image',
-                     data={'dockerfile': sample_dockerfile,
-                           'name': 'hellozeworld'})
-    image_id = json.loads(rv.data.decode('utf-8'))['id']
+    with patch('docker.Client'):
+        rv = client.post('/image',
+                         data={'dockerfile': sample_dockerfile,
+                               'name': 'hellozeworld'})
+        image_id = json.loads(rv.data.decode('utf-8'))['id']
 
-    rv = client.post('/pipeline',
-                     data={'name': 'my first pipeline'})
-    pipeline_id = json.loads(rv.data.decode('utf-8'))['id']
+        rv = client.post('/pipeline',
+                         data={'name': 'my first pipeline'})
+        pipeline_id = json.loads(rv.data.decode('utf-8'))['id']
 
-    data['image_id'] = str(image_id)
-    rv = client.post('/pipeline/%s/job' % pipeline_id,
-                     data=data)
-    job_id = json.loads(rv.data.decode('utf-8'))['id']
-    assert job_id is not None
-    return image_id, pipeline_id, job_id
+        data['image_id'] = str(image_id)
+        rv = client.post('/pipeline/%s/job' % pipeline_id,
+                         data=data)
+        job_id = json.loads(rv.data.decode('utf-8'))['id']
+        assert job_id is not None
+        return image_id, pipeline_id, job_id

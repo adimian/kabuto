@@ -22,6 +22,7 @@ def open_channel(config):
     yield channel
     connection.close()
 
+
 def put_in_message_queue(queue, message, config):
     with open_channel(config) as channel:
         channel.queue_declare(queue=queue, durable=True)
@@ -30,6 +31,7 @@ def put_in_message_queue(queue, message, config):
                               routing_key=queue,
                               body=message,
                               properties=properties)
+
 
 def publish_job(message, config):
     put_in_message_queue('jobs', message, config)

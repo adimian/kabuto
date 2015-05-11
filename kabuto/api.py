@@ -17,7 +17,6 @@ from sqlalchemy.orm.exc import NoResultFound
 from werkzeug.datastructures import FileStorage
 import docker
 import flask_restful as restful
-import pika
 
 from mailer import send_token
 from utils import publish_job
