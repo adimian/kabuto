@@ -1,5 +1,6 @@
 import json
 from kabuto.tests.conftest import preload
+from unittest.mock import patch
 
 
 def test_create_pipeline(authenticated_client):
@@ -10,7 +11,11 @@ def test_create_pipeline(authenticated_client):
     assert pipeline_id is not None
 
 
-def test_submit_pipeline(client):
+@patch('pika.PlainCredentials')
+@patch('pika.ConnectionParameters')
+@patch('pika.BlockingConnection')
+@patch('pika.BasicProperties')
+def test_submit_pipeline(mpc, mcp, mbc, mbp, client):
     client.post('/login', data={'login': 'me',
                                 'password': 'Secret'})
     _, pid1, _ = preload(client, {'command': 'echo hello world'})
