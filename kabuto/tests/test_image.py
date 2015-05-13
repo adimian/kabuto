@@ -1,6 +1,11 @@
 from kabuto.tests import sample_dockerfile
 import json
 from unittest.mock import patch
+from kabuto.api import Image
+
+update_file = '''FROM phusion/baseimage:0.9.16
+CMD ["echo", "hello world"]
+'''
 
 
 def test_create_image(authenticated_client):
@@ -11,6 +16,45 @@ def test_create_image(authenticated_client):
         assert rv.status_code == 200
         image_id = json.loads(rv.data.decode('utf-8'))['id']
         assert image_id is not None
+
+
+def test_update_image(authenticated_client):
+    with patch('docker.Client'):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld'})
+        assert rv.status_code == 200
+        image_id = json.loads(rv.data.decode('utf-8'))['id']
+
+        new_name = 'some_new_name'
+        rv = authenticated_client.put('/image/%s' % image_id,
+                                      data={'dockerfile': update_file,
+                                            'name': new_name})
+        img = Image.query.filter_by(id=image_id).first()
+        assert img.name == new_name
+        assert img.dockerfile == update_file
+
+        rv = authenticated_client.put('/image/999',
+                                      data={'dockerfile': update_file,
+                                            'name': new_name})
+        data = json.loads(rv.data.decode('utf-8'))
+        assert data.get('error', None)
+
+
+def test_delete_image(authenticated_client):
+    with patch('docker.Client'):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld'})
+        assert rv.status_code == 200
+        image_id = json.loads(rv.data.decode('utf-8'))['id']
+
+        authenticated_client.delete('/image/%s' % image_id)
+        assert not Image.query.filter_by(id=image_id).first()
+
+        rv = authenticated_client.delete('/image/999')
+        data = json.loads(rv.data.decode('utf-8'))
+        assert data.get('error', None)
 
 
 def test_get_details(client):

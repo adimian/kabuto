@@ -12,6 +12,7 @@ class Config(object):
     SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/kabuto.db'
     DOCKER_CLIENT = 'unix://var/run/docker.sock'
     DOCKER_REGISTRY_URL = 'localhost:7900'
+    DOCKER_REGISTRY_URL = 'localhost:7900/kabuto'
     DOCKER_REGISTRY_INSECURE = True
     DOCKER_LOGIN = ""
     DOCKER_PASSWORD = ""

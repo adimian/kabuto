@@ -16,11 +16,11 @@ group.add_argument('--big_file', action='store_true')
 args = parser.parse_args()
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
-base_url = "http://127.0.0.1:5000"
+base_url = "https://kabuto.adimian.com"
 
 
 def do_a_barrel_roll(data, files, base_url, dockerfile, dockername, file_name):
-    r = requests.post('%s/login' % base_url, data={'login': 'maarten',
+    r = requests.post('%s/login' % base_url, data={'login': 'maarten1',
                                                    'password': 'test'})
     assert r.status_code == 200
     c = r.cookies

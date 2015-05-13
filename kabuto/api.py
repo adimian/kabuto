@@ -152,7 +152,9 @@ class Job(db.Model):
     results_token = db.Column(db.String(36))
     results_path = db.Column(db.String(128))
 
-    def __init__(self, pipeline, image, attachments, command):
+    sequence_number = db.Column(db.Integer)
+
+    def __init__(self, pipeline, image, attachments, command, sequence=None):
         self.pipeline = pipeline
         self.image = image
         self.command = command
@@ -160,6 +162,10 @@ class Job(db.Model):
         self.attachments_token = str(uuid.uuid4())
         self.results_token = str(uuid.uuid4())
         self.results_path = tempfile.mkdtemp(prefix='kabuto-outbox-')
+        if not sequence:
+            self.sequence_number = len(pipeline.jobs.all()) - 1
+        else:
+            self.sequence_number = sequence
 
     def serialize(self):
         return json.dumps({'execution': self.id,
@@ -180,6 +186,10 @@ class Job(db.Model):
                 "results_path": self.results_path,
                 "image": {"id": self.image_id},
                 "pipeline": {"id": self.pipeline_id}}
+
+    @property
+    def owner(self):
+        return self.pipeline.owner
 
 
 class ExecutionLog(db.Model):
@@ -235,6 +245,12 @@ def get_folder_as_zip(zip_name, folder_to_zip):
     return zip_file
 
 
+def get_entities(entity, **kwargs):
+    if not entity == User:
+        kwargs["owner"] = current_user
+    return entity.query.filter_by(**kwargs).all()
+
+
 class Login(restful.Resource):
     def post(self):
         parser = reqparse.RequestParser()
@@ -255,6 +271,42 @@ class Images(ProtectedResource):
         return prepare_entity_dict(Image, image_id)
 
     def post(self):
+        name, content = self.build_and_push()
+
+        image = Image(content, name, current_user)
+        db.session.add(image)
+        db.session.commit()
+
+        return {'id': image.id}
+
+    def put(self, image_id):
+        image = get_entities(Image, id=image_id)
+        if not image:
+            return {'error': ('You either don\'t have the rights to update '
+                              'this image, or it does not exist')}
+        image = image[0]
+        name, content = self.build_and_push()
+        if name and not image.name == name:
+            image.name = name
+        if content:
+            image.dockerfile = content
+        db.session.add(image)
+        db.session.commit()
+        return {"status": "Successfully updated the image"}
+
+    def delete(self, image_id):
+        image = get_entities(Image, id=image_id)
+        if not image:
+            return {'error': ('You either don\'t have the rights to update '
+                              'this image, or it does not exist')}
+        image = image[0]
+        client = get_docker_client()
+        client.remove_image(image.name)
+        db.session.delete(image)
+        db.session.commit()
+        return {"status": "Successfully deleted the image"}
+
+    def build_and_push(self):
         parser = reqparse.RequestParser()
         parser.add_argument('dockerfile', type=str, required=True)
         parser.add_argument('name', type=str, required=True)
@@ -269,15 +321,10 @@ class Images(ProtectedResource):
 
         tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
         client.build(tag=tag, fileobj=BytesIO(content.encode('utf-8')))
-
-        image = Image(content, name, current_user)
-        db.session.add(image)
-        db.session.commit()
-
         client.push(repository=tag,
                     insecure_registry=app.config['DOCKER_REGISTRY_INSECURE'])
 
-        return {'id': image.id}
+        return name, content
 
 
 class Pipelines(ProtectedResource):
@@ -295,6 +342,63 @@ class Pipelines(ProtectedResource):
         db.session.commit()
 
         return {'id': pipeline.id}
+
+    def put(self, pipeline_id):
+        pl = get_entities(Pipeline, id=pipeline_id)
+        if not pl:
+            return {'error': ('You either don\'t have the rights to update '
+                              'this image, or it does not exist')}
+        pl = pl[0]
+
+        parser = reqparse.RequestParser()
+        parser.add_argument('name')
+        parser.add_argument('remove_jobs')
+        parser.add_argument('rearrange_jobs')
+        args = parser.parse_args()
+
+        return_dict = {}
+
+        if args['name']:
+            pl.name = args['name']
+            return_dict['name'] = "Successfully updated name"
+        if args.get('remove_jobs'):
+            remove_jobs = args['remove_jobs'].split(",")
+            pl.jobs.all()
+            jobs = []
+            for job in pl.jobs.all():
+                if str(job.id) not in remove_jobs:
+                    jobs.append(job)
+            pl.jobs = jobs
+            return_dict['remove_jobs'] = "Successfully removed jobs"
+        if args.get('rearrange_jobs'):
+            rearrange_jobs = args['rearrange_jobs'].split(",")
+            current_jobs = dict([(str(j.id), j) for j in pl.jobs.all()])
+            if not sorted(list(current_jobs.keys())) == sorted(rearrange_jobs):
+                rearrange_ids = ", ".join(sorted(rearrange_jobs))
+                current_ids = ", ".join(sorted(current_jobs))
+                return_dict['rearrange_jobs'] = ("Could not rearrange jobs. "
+                                                 "rearrange ids are [%s] while"
+                                                 " current ids are [%s]" %
+                                                 (rearrange_ids, current_ids))
+            else:
+                for idx, job in enumerate(rearrange_jobs):
+                    current_jobs[job].sequence_number = idx
+                    db.session.add(current_jobs[job])
+                return_dict['rearrange_jobs'] = "Successfully removed jobs"
+
+        db.session.add(pl)
+        db.session.commit()
+        return return_dict
+
+    def delete(self, pipeline_id):
+        pipeline = get_entities(Pipeline, id=pipeline_id)
+        if not pipeline:
+            return {'error': ('You either don\'t have the rights to update '
+                              'this pipeline, or it does not exist')}
+        pipeline = pipeline[0]
+        db.session.delete(pipeline)
+        db.session.commit()
+        return {"status": "Successfully deleted the pipeline"}
 
 
 class Jobs(ProtectedResource):
