@@ -9,7 +9,8 @@ import zipfile
 
 from flask import Flask, abort, send_file, request
 from flask_bcrypt import Bcrypt
-from flask_login import LoginManager, login_required, login_user, current_user
+from flask_login import (LoginManager, login_required, login_user,
+                         current_user, UserMixin)
 from flask_restful import reqparse
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -17,6 +18,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from werkzeug.datastructures import FileStorage
 import docker
 import flask_restful as restful
+from flask_ldap3_login import LDAP3LoginManager, AuthenticationResponseStatus as ars
 
 from mailer import send_token
 from utils import publish_job
@@ -29,11 +31,18 @@ class ProtectedResource(restful.Resource):
 app = Flask(__name__)
 api = restful.Api(app)
 login_manager = LoginManager(app)
+ldap_manager = None
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 
 logger = logging.getLogger(__name__)
 logger.level = logging.DEBUG
+
+
+def set_ldap_manager(app):
+    global ldap_manager
+    if app.config['LDAP_HOST']:
+        ldap_manager = LDAP3LoginManager(app)
 
 
 def get_remote_ip():
@@ -60,8 +69,9 @@ class User(db.Model):
 
     def __init__(self, login, password, email):
         self.login = login
-        self.password = password
-        self.email = email
+        if not ldap_manager:
+            self.password = password
+            self.email = email
 
     @hybrid_property
     def password(self):
@@ -259,10 +269,22 @@ class Login(restful.Resource):
         args = parser.parse_args()
 
         user = load_user(args['login'])
-        if user:
+        can_login = False
+
+        print(ldap_manager)
+        if ldap_manager:
+            response = ldap_manager.authenticate(args['login'],
+                                                 args['password'])
+            if ars.success == response.status:
+                if not user:
+                    user = User(args['login'], None, None)
+                can_login = True
+        elif user:
             if user.is_correct_password(args['password']):
-                login_user(user)
-                return {'login': 'success'}
+                can_login = True
+        if can_login:
+            login_user(user)
+            return {'login': 'success'}
         abort(401)
 
 
@@ -557,6 +579,9 @@ class Register(restful.Resource):
         return {"registration": "user or token not found"}
 
     def post(self):
+        if ldap_manager:
+            return {"status": "fail",
+                    "error": "Working with ldap context, cannot register"}
         parser = reqparse.RequestParser()
         parser.add_argument('login', type=str, required=True)
         parser.add_argument('password', type=str, required=True)
@@ -608,7 +633,7 @@ api.add_resource(LogWithdrawal,
 
 if __name__ == '__main__':
     app.config.from_object('config.Config')
-
+    set_ldap_manager()
     db.create_all()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])
