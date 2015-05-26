@@ -2,6 +2,7 @@ from kabuto.api import db, Job
 import zipfile
 from io import BytesIO
 import os
+import json
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
@@ -22,6 +23,12 @@ def test_download_attachments(preloaded_client_with_attachments):
     url = "/execution/%s/attachments/%s" % (job.id, "invalid_token")
     rv = preloaded_client_with_attachments.get(url)
     assert rv.status_code == 404
+
+    url = "/execution/%s/attachments/%s" % (999, job.attachments_token)
+    rv = preloaded_client_with_attachments.get(url)
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Job not found"
 
     job = Job.query.all()[0]
     job.attachments_path = os.path.join(job.attachments_path, "does_not_exist")
@@ -57,3 +64,9 @@ def test_upload_attachments(preloaded_client_with_attachments):
                        'results.zip')
     rv = preloaded_client_with_attachments.post(url, data=data)
     assert rv.status_code == 404
+
+    url = "/execution/%s/results/%s" % (999, job.results_token)
+    rv = preloaded_client_with_attachments.post(url)
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Job not found"

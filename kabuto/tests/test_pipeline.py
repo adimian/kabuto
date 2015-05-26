@@ -109,6 +109,11 @@ def test_submit_pipeline(mpc, mcp, mbc, mbp, client):
     submit_id = list(json.loads(rv.data.decode('utf-8')))[0]
     assert submit_id is not None
 
+    rv = client.post('/pipeline/%s/submit' % 999)
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Pipeline not found"
+
 
 def test_get_details(client):
     client.post('/login', data={'login': 'me',

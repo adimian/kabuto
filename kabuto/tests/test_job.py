@@ -30,6 +30,20 @@ def test_create_job(authenticated_client):
     assert rv.status_code == 200
     json.loads(rv.data.decode('utf-8'))['id']
 
+    rv = authenticated_client.post('/pipeline/%s/job' % pipeline_id,
+                                   data={'image_id': 999,
+                                         'command': 'echo hello world'})
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Image not found"
+
+    rv = authenticated_client.post('/pipeline/%s/job' % 999,
+                                   data={'image_id': 999,
+                                         'command': 'echo hello world'})
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Pipeline not found"
+
 
 def test_create_job_with_attachment(authenticated_client):
     with patch('docker.Client'):
@@ -116,3 +130,8 @@ def test_download_result(authenticated_client):
     rv = authenticated_client.get(result_url)
     data = json.loads(rv.data.decode('utf-8'))
     assert data.get("error", None)
+
+    rv = authenticated_client.get("/pipeline/%s/job/%s?result" % (0, 999))
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Job not found"

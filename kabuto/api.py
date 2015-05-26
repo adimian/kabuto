@@ -429,7 +429,11 @@ class Jobs(ProtectedResource):
         parser.add_argument('result', default=False)
         args = parser.parse_args()
         if (not args['result'] is False) and job_id:
-            job = Job.query.filter_by(id=job_id).one()
+            try:
+                job = Job.query.filter_by(id=job_id).one()
+            except NoResultFound:
+                return {"error": "Job not found"}
+
             if not job.state == "done":
                 return {"error": "Job has not finished running, or has failed"}
             try:
@@ -455,8 +459,15 @@ class Jobs(ProtectedResource):
             with open(os.path.join(path, filestorage.filename), "wb+") as fh:
                 fh.write(filestorage.read())
 
-        pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
-        image = Image.query.filter_by(id=args['image_id']).one()
+        try:
+            pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
+        except NoResultFound:
+            return {"error": "Pipeline not found"}
+
+        try:
+            image = Image.query.filter_by(id=args['image_id']).one()
+        except NoResultFound:
+            return {"error": "Image not found"}
 
         job = Job(pipeline, image, path, args['command'])
 
@@ -468,7 +479,11 @@ class Jobs(ProtectedResource):
 
 class Submitter(ProtectedResource):
     def post(self, pipeline_id):
-        pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
+        try:
+            pipeline = Pipeline.query.filter_by(id=pipeline_id).one()
+        except NoResultFound:
+            return {"error": "Pipeline not found"}
+
         jobs = []
         for job in pipeline.jobs:
             jobs.append(job)
@@ -482,7 +497,11 @@ class Submitter(ProtectedResource):
 
 class LogDeposit(restful.Resource):
     def post(self, job_id, token):
-        job = Job.query.filter_by(id=job_id).one()
+        try:
+            job = Job.query.filter_by(id=job_id).one()
+        except NoResultFound:
+            return {"error": "Job not found"}
+
         if not job or not job.results_token == token:
             msg = "Unauthorized log deposit from %s with token: %s"
             logging.info(msg % (get_remote_ip(), token))
@@ -506,7 +525,11 @@ class LogWithdrawal(ProtectedResource):
 
 class Attachment(restful.Resource):
     def get(self, job_id, token):
-        job = Job.query.filter_by(id=job_id).one()
+        try:
+            job = Job.query.filter_by(id=job_id).one()
+        except NoResultFound:
+            return {"error": "Job not found"}
+
         if not job or not job.attachments_token == token:
             msg = "Unauthorized download request from %s with token: %s"
             logging.info(msg % (get_remote_ip(), token))
@@ -525,7 +548,10 @@ class Attachment(restful.Resource):
             return "Something went wrong, contact your admin"
 
     def post(self, job_id, token):
-        job = Job.query.filter_by(id=job_id).one()
+        try:
+            job = Job.query.filter_by(id=job_id).one()
+        except NoResultFound:
+            return {"error": "Job not found"}
 
         if not job.results_token == token:
             msg = "Unauthorized upload request from %s with token: %s"
@@ -570,7 +596,7 @@ def zipdir(path, zipf, root_folder):
 
 class Register(restful.Resource):
     def get(self, user, token):
-        user = User.query.filter_by(login=user).one()
+        user = load_user(user)
         if user and user.token == token:
             user.active = True
             db.session.add(user)

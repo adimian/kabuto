@@ -16,6 +16,12 @@ def test_logs(preloaded_client):
     r = ac.post(wrong_url, data={"log_line": log_line})
     assert r.status_code == 404
 
+    url = "/execution/%s/log/%s" % (999, job.results_token)
+    rv = ac.post(url, data={"log_line": log_line})
+    data = json.loads(rv.data.decode('utf-8'))
+    assert data.get('error', None)
+    assert data['error'] == "Job not found"
+
     url = "/execution/%s/log/%s" % (job.id, job.results_token)
     ac.post(url, data={"log_line": log_line})
 
