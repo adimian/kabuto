@@ -2,6 +2,7 @@ from kabuto.tests import sample_dockerfile
 import json
 from unittest.mock import patch
 from kabuto.api import Image
+from kabuto.tests.conftest import MockClient, BrokenBuildMockClient
 
 update_file = '''FROM phusion/baseimage:0.9.16
 CMD ["echo", "hello world"]
@@ -9,7 +10,7 @@ CMD ["echo", "hello world"]
 
 
 def test_create_image(authenticated_client):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
@@ -17,9 +18,19 @@ def test_create_image(authenticated_client):
         image_id = json.loads(rv.data.decode('utf-8'))['id']
         assert image_id is not None
 
+    with patch('docker.Client', BrokenBuildMockClient):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld'})
+        assert rv.status_code == 200
+        data = json.loads(rv.data.decode('utf-8'))
+        assert data.get("error")
+        assert data["output"] == ["some output saying your "
+                                  "build is unsuccessful"]
+
 
 def test_update_image(authenticated_client):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
@@ -42,7 +53,7 @@ def test_update_image(authenticated_client):
 
 
 def test_delete_image(authenticated_client):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
@@ -58,7 +69,7 @@ def test_delete_image(authenticated_client):
 
 
 def test_get_details(client):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         client.post('/login', data={'login': 'me',
                                     'password': 'Secret'})
 

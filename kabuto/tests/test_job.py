@@ -6,13 +6,14 @@ import os
 import zipfile
 from io import BytesIO
 from unittest.mock import patch
+from kabuto.tests.conftest import MockClient
 
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_create_job(authenticated_client):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
@@ -46,7 +47,7 @@ def test_create_job(authenticated_client):
 
 
 def test_create_job_with_attachment(authenticated_client):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
@@ -99,7 +100,7 @@ def test_get_details(client):
 def test_get_job_details(authenticated_client):
     client = authenticated_client
     data = {'command': 'echo hello world'}
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = client.post('/image',
                          data={'dockerfile': sample_dockerfile,
                                'name': 'hellozeworld'})

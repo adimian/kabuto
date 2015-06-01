@@ -301,7 +301,10 @@ class Images(ProtectedResource):
         return prepare_entity_dict(Image, image_id)
 
     def post(self):
-        name, content = self.build_and_push()
+        name, content, error, output = self.build_and_push()
+
+        if error:
+            return {'error': error, 'output': output}
 
         image = Image(content, name, current_user)
         db.session.add(image)
@@ -315,7 +318,10 @@ class Images(ProtectedResource):
             return {'error': ('You either don\'t have the rights to update '
                               'this image, or it does not exist')}
         image = image[0]
-        name, content = self.build_and_push()
+        name, content, error, output = self.build_and_push()
+        if error:
+            return {'error': error, 'output': output}
+
         if name and not image.name == name:
             image.name = name
         if content:
@@ -350,11 +356,20 @@ class Images(ProtectedResource):
         # TODO: async all the following
 
         tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
-        client.build(tag=tag, fileobj=BytesIO(content.encode('utf-8')))
-        client.push(repository=tag,
-                    insecure_registry=app.config['DOCKER_REGISTRY_INSECURE'])
+        result = client.build(tag=tag,
+                              fileobj=BytesIO(content.encode('utf-8')))
 
-        return name, content
+        error = "Unsuccessful build"
+        output = []
+        for line in result:
+            output.append(str(line))
+            if "Successfully built" in str(line):
+                error = None
+        if not error:
+            client.push(repository=tag,
+                        insecure_registry=app.config['DOCKER_REGISTRY_INSECURE'])
+
+        return name, content, error, output
 
 
 class Pipelines(ProtectedResource):
@@ -628,8 +643,8 @@ class Register(restful.Resource):
         user.token = str(uuid.uuid4())
         db.session.add(user)
         db.session.commit()
-        send_token(args['email'], user, user.token,
-                   url_root=request.url_root[:-1])
+#         send_token(args['email'], user, user.token,
+#                    url_root=request.url_root[:-1])
         return {"status": "success",
                 "token": user.token}
 
@@ -667,7 +682,7 @@ api.add_resource(LogWithdrawal,
 
 if __name__ == '__main__':
     app.config.from_object('config.Config')
-    set_ldap_manager()
+    set_ldap_manager(app)
     db.create_all()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])

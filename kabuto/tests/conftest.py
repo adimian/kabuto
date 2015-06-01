@@ -9,6 +9,28 @@ from unittest.mock import patch
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 
+class MockClient(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def build(self, *args, **kwargs):
+        return ["Successfully built"]
+
+    def push(self, *args, **kwargs):
+        pass
+
+    def remove_image(self, *args, **kwargs):
+        pass
+
+
+class BrokenBuildMockClient(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def build(self, *args, **kwargs):
+        return ["some output saying your build is unsuccessful"]
+
+
 @pytest.fixture
 def client():
     app.config.from_object('kabuto.config.TestingConfig')
@@ -51,7 +73,7 @@ def preloaded_client_with_attachments(authenticated_client):
 
 
 def preload(client, data):
-    with patch('docker.Client'):
+    with patch('docker.Client', MockClient):
         rv = client.post('/image',
                          data={'dockerfile': sample_dockerfile,
                                'name': 'hellozeworld'})
