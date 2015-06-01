@@ -37,18 +37,19 @@ def test_create_image(authenticated_client):
         assert data["output"] == ["some output saying your "
                                   "build is unsuccessful"]
 
-    url = os.path.join(ROOT_DIR, "data", "repo")
-    rm_hg(url)
-    repo = hgapi.hgapi.Repo(url)
-    repo.hg_init()
-    repo.hg_add()
-    repo.hg_commit("init", user='me')
-    data = {"repo_url": url, "name": "some_image"}
-    rv = authenticated_client.post('/image', data=data)
-    assert rv.status_code == 200
-    image_id = json.loads(rv.data.decode('utf-8'))['id']
-    assert image_id is not None
-    rm_hg(url)
+    with patch('docker.Client', MockClient):
+        url = os.path.join(ROOT_DIR, "data", "repo")
+        rm_hg(url)
+        repo = hgapi.hgapi.Repo(url)
+        repo.hg_init()
+        repo.hg_add()
+        repo.hg_commit("init", user='me')
+        data = {"repo_url": url, "name": "some_image"}
+        rv = authenticated_client.post('/image', data=data)
+        assert rv.status_code == 200
+        image_id = json.loads(rv.data.decode('utf-8'))['id']
+        assert image_id is not None
+        rm_hg(url)
 
 
 def test_update_image(authenticated_client):
