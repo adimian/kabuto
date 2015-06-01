@@ -2,11 +2,20 @@ from kabuto.tests import sample_dockerfile
 import json
 from unittest.mock import patch
 from kabuto.api import Image
-from kabuto.tests.conftest import MockClient, BrokenBuildMockClient
+from kabuto.tests.conftest import MockClient, BrokenBuildMockClient, ROOT_DIR
+import os
+import hgapi
+import shutil
 
 update_file = '''FROM phusion/baseimage:0.9.16
 CMD ["echo", "hello world"]
 '''
+
+
+def rm_hg(url):
+    hg_path = os.path.join(url, ".hg")
+    if os.path.exists(hg_path):
+        shutil.rmtree(hg_path)
 
 
 def test_create_image(authenticated_client):
@@ -27,6 +36,19 @@ def test_create_image(authenticated_client):
         assert data.get("error")
         assert data["output"] == ["some output saying your "
                                   "build is unsuccessful"]
+
+    url = os.path.join(ROOT_DIR, "data", "repo")
+    rm_hg(url)
+    repo = hgapi.hgapi.Repo(url)
+    repo.hg_init()
+    repo.hg_add()
+    repo.hg_commit("init", user='me')
+    data = {"repo_url": url, "name": "some_image"}
+    rv = authenticated_client.post('/image', data=data)
+    assert rv.status_code == 200
+    image_id = json.loads(rv.data.decode('utf-8'))['id']
+    assert image_id is not None
+    rm_hg(url)
 
 
 def test_update_image(authenticated_client):

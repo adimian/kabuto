@@ -19,9 +19,11 @@ from werkzeug.datastructures import FileStorage
 import docker
 import flask_restful as restful
 from flask_ldap3_login import LDAP3LoginManager, AuthenticationResponseStatus as ars
+from hgapi import hg_clone
 
 from mailer import send_token
 from utils import publish_job
+import shutil
 
 
 class ProtectedResource(restful.Resource):
@@ -344,23 +346,44 @@ class Images(ProtectedResource):
 
     def build_and_push(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('dockerfile', type=str, required=True)
+        parser.add_argument('dockerfile', type=str)
         parser.add_argument('name', type=str, required=True)
+        parser.add_argument('repo_url', type=str)
 
         args = parser.parse_args()
+
         content = args['dockerfile']
         name = args['name']
+        url = args['repo_url']
+
+        error = None
+        output = []
+        folder = None
 
         client = get_docker_client()
 
         # TODO: async all the following
 
+        kwargs = {}
+        if content:
+            fileobj = BytesIO(content.encode('utf-8'))
+            kwargs['fileobj'] = fileobj
+        elif url:
+            folder = tempfile.mkdtemp()
+            hg_clone(url, folder)
+            dockerfile = os.path.join(folder, "Dockerfile")
+            if not os.path.exists(dockerfile):
+                error = "Repository has no file named 'Dockerfile'"
+            kwargs['path'] = folder
+        else:
+            error = "Must provide a dockerfile or a repository"
+        if error:
+            return None, None, error, None
+
+        error = "Build failed"
         tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
         result = client.build(tag=tag,
-                              fileobj=BytesIO(content.encode('utf-8')))
-
-        error = "Unsuccessful build"
-        output = []
+                              **kwargs)
         for line in result:
             output.append(str(line))
             if "Successfully built" in str(line):
@@ -368,6 +391,9 @@ class Images(ProtectedResource):
         if not error:
             client.push(repository=tag,
                         insecure_registry=app.config['DOCKER_REGISTRY_INSECURE'])
+
+        if folder:
+            shutil.rmtree(folder)
 
         return name, content, error, output
 
