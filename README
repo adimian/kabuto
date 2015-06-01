@@ -96,10 +96,10 @@ retrieving image data
 Retrieving data can be done by doing a GET request to the following url
 http://127.0.0.1:5000/image/<string:image_id>
 
-Data: JSON {"id": <image_id>,
-			"name": <image_name>,
-			"dockerfile": <dockerfile contents>,
-			"creation_date": <date of creation>}
+Data: JSON {"<image_id>":{"id": <image_id>,
+						  "name": <image_name>,
+					      "dockerfile": <dockerfile contents>,
+						  "creation_date": <date of creation>}}
 
 Creating a Pipeline
 ===================
@@ -133,10 +133,10 @@ retrieving pipeline data
 Retrieving data can be done by doing a GET request to the following url
 http://127.0.0.1:5000/pipeline/<string:pipeline_id>
 
-Data: JSON {"id": <pipeline_id>,
-            "name": <pipeline_name>,
-            "creation_date": "date of creation",
-            "jobs": [{"id": <job_id>}, {"id": <job_id>}, ...]}
+Data: JSON {"<pipeline_id>": {"id": <pipeline_id>,
+				              "name": <pipeline_name>,
+				              "creation_date": "date of creation",
+				              "jobs": [{"id": <job_id>}, {"id": <job_id>}, ...]}}
 
 Creating a Job
 ==============
@@ -182,17 +182,17 @@ retrieving job data
 Retrieving data can be done by doing a GET request to the following url
 http://127.0.0.1:5000/pipeline/<string:pipeline_id>/job/<string:job_id>
 
-Data: JSON {"id": <job_id>,
-            "command": <value>,
-            "state": <value>, (possible states are: ready, in_queue, running, done/failed)
-            "creation_date": <date of creation>,
-            "used_cpu": <value>,
-            "used_memory": <value>,
-            "used_io": <value>,
-            "attachment_token": <value>, (to be removed in future release, holds no intrest for users)
-            "results_path": <value>, (to be removed in future release, holds no intrest for users)
-            "image": {"id": <image_id>},
-            "pipeline": {"id": <pipeline_id>}}
+Data: JSON {"<job_id>": {"id": <job_id>,
+			              "command": <value>,
+			              "state": <value>, (possible states are: ready, in_queue, running, done/failed)
+			              "creation_date": <date of creation>,
+			              "used_cpu": <value>,
+			              "used_memory": <value>,
+			              "used_io": <value>,
+			              "attachment_token": <value>, (to be removed in future release, holds no intrest for users)
+			              "results_path": <value>, (to be removed in future release, holds no intrest for users)
+			              "image": {"id": <image_id>},
+			              "pipeline": {"id": <pipeline_id>}}}
 
 Submitting a pipeline
 =====================

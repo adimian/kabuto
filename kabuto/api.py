@@ -10,7 +10,7 @@ import zipfile
 from flask import Flask, abort, send_file, request
 from flask_bcrypt import Bcrypt
 from flask_login import (LoginManager, login_required, login_user,
-                         current_user, UserMixin)
+                         current_user)
 from flask_restful import reqparse
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -37,6 +37,8 @@ bcrypt = Bcrypt(app)
 
 logger = logging.getLogger(__name__)
 logger.level = logging.DEBUG
+
+DATE_FORMAT = "%Y-%m-%d"
 
 
 def set_ldap_manager(app):
@@ -116,7 +118,7 @@ class Image(db.Model):
         return {"id": self.id,
                 "name": self.name,
                 "dockerfile": self.dockerfile,
-                "creation_date": self.creation_date.strftime("%d %m %Y")}
+                "creation_date": self.creation_date.strftime(DATE_FORMAT)}
 
 
 class Pipeline(db.Model):
@@ -136,7 +138,7 @@ class Pipeline(db.Model):
         jobs = [{"id": j.id} for j in Job.query.filter_by(pipeline=self)]
         return {"id": self.id,
                 "name": self.name,
-                "creation_date": self.creation_date.strftime("%d %m %Y"),
+                "creation_date": self.creation_date.strftime(DATE_FORMAT),
                 "jobs": jobs}
 
 
@@ -188,7 +190,7 @@ class Job(db.Model):
         return {"id": self.id,
                 "command": self.command,
                 "state": self.state,
-                "creation_date": self.creation_date.strftime("%d %m %Y"),
+                "creation_date": self.creation_date.strftime(DATE_FORMAT),
                 "used_cpu": self.used_cpu,
                 "used_memory": self.used_memory,
                 "used_io": self.used_io,
@@ -234,7 +236,13 @@ def prepare_entity_dict(entity, entity_id, **kwargs):
     if isinstance(entity, list):
         base_class, join_class = entity
         query = db.session.query(base_class).join(join_class)
-        entity_list = query.filter_by(**kwargs).all()
+        job_id, pipeline_id = entity_id
+        if not job_id and not pipeline_id:
+            entity_list = query.filter(join_class.owner == current_user).all()
+        else:
+            entity_list = query.filter(base_class.id == job_id,
+                                       join_class.id == pipeline_id,
+                                       join_class.owner == current_user).all()
     else:
         entity_list = entity.query.filter_by(**kwargs).all()
     entity_dict = {}
@@ -443,7 +451,7 @@ class Jobs(ProtectedResource):
                                  attachment_filename=os.path.basename(z_file))
             except Exception:
                 return {"error": "Something went wrong, contact your admin"}
-        return prepare_entity_dict([Job, Pipeline], job_id)
+        return prepare_entity_dict([Job, Pipeline], [job_id, pipeline_id])
 
     def post(self, pipeline_id):
         parser = reqparse.RequestParser()

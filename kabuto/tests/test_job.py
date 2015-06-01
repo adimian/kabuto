@@ -96,6 +96,37 @@ def test_get_details(client):
     assert jobs[str(jid2)]["pipeline"]["id"] == pid2
 
 
+def test_get_job_details(authenticated_client):
+    client = authenticated_client
+    data = {'command': 'echo hello world'}
+    with patch('docker.Client'):
+        rv = client.post('/image',
+                         data={'dockerfile': sample_dockerfile,
+                               'name': 'hellozeworld'})
+        image_id = json.loads(rv.data.decode('utf-8'))['id']
+
+        rv = client.post('/pipeline',
+                         data={'name': 'my first pipeline'})
+        pipeline_id1 = json.loads(rv.data.decode('utf-8'))['id']
+        rv = client.post('/pipeline',
+                         data={'name': 'my first pipeline'})
+        pipeline_id2 = json.loads(rv.data.decode('utf-8'))['id']
+
+        data['image_id'] = str(image_id)
+        client.post('/pipeline/%s/job' % pipeline_id2,
+                    data=data)
+        rv = client.post('/pipeline/%s/job' % pipeline_id1,
+                         data=data)
+        client.post('/pipeline/%s/job' % pipeline_id1,
+                    data=data)
+
+        jid2 = json.loads(rv.data.decode('utf-8'))['id']
+
+        rv = client.get("/pipeline/%s/job/%s" % (pipeline_id1, jid2))
+        keys = list(json.loads(rv.data.decode('utf-8')).keys())
+        assert str(jid2) in keys
+
+
 def test_download_result(authenticated_client):
     pipeline = Pipeline.query.all()[0]
     image = Image.query.all()[0]
