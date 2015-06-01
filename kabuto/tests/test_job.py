@@ -122,6 +122,10 @@ def test_get_job_details(authenticated_client):
 
         jid2 = json.loads(rv.data.decode('utf-8'))['id']
 
+        rv = client.get("/pipeline/%s/job" % (pipeline_id1))
+        keys = list(json.loads(rv.data.decode('utf-8')).keys())
+        assert len(keys) == 2
+
         rv = client.get("/pipeline/%s/job/%s" % (pipeline_id1, jid2))
         keys = list(json.loads(rv.data.decode('utf-8')).keys())
         assert str(jid2) in keys

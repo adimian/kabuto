@@ -236,13 +236,13 @@ def prepare_entity_dict(entity, entity_id, **kwargs):
     if isinstance(entity, list):
         base_class, join_class = entity
         query = db.session.query(base_class).join(join_class)
-        job_id, pipeline_id = entity_id
-        if not job_id and not pipeline_id:
-            entity_list = query.filter(join_class.owner == current_user).all()
-        else:
-            entity_list = query.filter(base_class.id == job_id,
-                                       join_class.id == pipeline_id,
-                                       join_class.owner == current_user).all()
+        query = query.filter(join_class.owner == current_user)
+        base_id, join_id = entity_id
+        if base_id:
+            query = query.filter(base_class.id == base_id)
+        if join_id:
+            query = query.filter(join_class.id == join_id)
+        entity_list = query.all()
     else:
         entity_list = entity.query.filter_by(**kwargs).all()
     entity_dict = {}
