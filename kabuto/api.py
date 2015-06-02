@@ -708,6 +708,7 @@ api.add_resource(LogWithdrawal,
 
 if __name__ == '__main__':
     app.config.from_object('config.Config')
+    app.config.from_envvar('KABUTO_CONFIG', silent=True)
     set_ldap_manager(app)
     db.create_all()
     app.run(host=app.config['HOST'],
