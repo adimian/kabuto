@@ -1,4 +1,3 @@
-from io import BytesIO
 import datetime
 import json
 import logging
@@ -7,35 +6,26 @@ import tempfile
 import uuid
 import zipfile
 
-from flask import Flask, abort, send_file, request
-from flask_bcrypt import Bcrypt
-from flask_login import (LoginManager, login_required, login_user,
+from flask import abort, send_file, request
+from flask_login import (login_required, login_user,
                          current_user)
 from flask_restful import reqparse
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.exc import NoResultFound
 from werkzeug.datastructures import FileStorage
-import docker
 import flask_restful as restful
-from flask_ldap3_login import LDAP3LoginManager, AuthenticationResponseStatus as ars
-from hgapi import hg_clone
+from flask_ldap3_login import AuthenticationResponseStatus as ars
 
 from mailer import send_token
-from utils import publish_job
-import shutil
+from utils import publish_job, make_app
+from tasks import build_and_push, get_docker_client
+
+
+app, api, login_manager, ldap_manager, db, bcrypt = make_app()
 
 
 class ProtectedResource(restful.Resource):
     method_decorators = [login_required]
-
-
-app = Flask(__name__)
-api = restful.Api(app)
-login_manager = LoginManager(app)
-ldap_manager = None
-db = SQLAlchemy(app)
-bcrypt = Bcrypt(app)
 
 logger = logging.getLogger(__name__)
 logger.level = logging.DEBUG
@@ -43,24 +33,9 @@ logger.level = logging.DEBUG
 DATE_FORMAT = "%Y-%m-%d"
 
 
-def set_ldap_manager(app):
-    global ldap_manager
-    if app.config['LDAP_HOST']:
-        ldap_manager = LDAP3LoginManager(app)
-
-
 def get_remote_ip():
     return request.environ.get('HTTP_X_REAL_IP') or \
         request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
-
-
-def get_docker_client():
-    client = docker.Client(base_url=app.config['DOCKER_CLIENT'])
-    if app.config['DOCKER_LOGIN']:
-        client.login(app.config['DOCKER_LOGIN'],
-                     app.config['DOCKER_PASSWORD'],
-                     registry=app.config['DOCKER_REGISTRY'])
-    return client
 
 
 class User(db.Model):
@@ -281,7 +256,6 @@ class Login(restful.Resource):
         user = load_user(args['login'])
         can_login = False
 
-        print(ldap_manager)
         if ldap_manager:
             response = ldap_manager.authenticate(args['login'],
                                                  args['password'])
@@ -298,39 +272,60 @@ class Login(restful.Resource):
         abort(401)
 
 
+class ImageBuild(ProtectedResource):
+    def get(self, build_id, image_id=None):
+        if image_id:
+            image = get_entities(Image, id=image_id)
+            if not image:
+                return {'error': 'could not find image with id %s' % image_id}
+            image = image[0]
+
+        res = build_and_push.AsyncResult(build_id)
+        if res and res.state == 'FAILED':
+            return {'state': res.state, 'error': 'Unknown error'}
+        elif res.state == 'SUCCESS':
+            name, content, error, output = res.get()
+            if error:
+                return {'state': 'FAILED',
+                        'error': error,
+                        'output': output}
+            if image_id:
+                if name and not image.name == name:
+                    image.name = name
+                if content:
+                    image.dockerfile = content
+                db.session.add(image)
+                db.session.commit()
+            else:
+                image = Image(content, name, current_user)
+                db.session.add(image)
+                db.session.commit()
+            return {'state': res.state,
+                    'id': image.id,
+                    'output': output}
+        else:
+            return {'state': res.state}
+
+
 class Images(ProtectedResource):
     def get(self, image_id=None):
         return prepare_entity_dict(Image, image_id)
 
     def post(self):
-        name, content, error, output = self.build_and_push()
-
-        if error:
-            return {'error': error, 'output': output}
-
-        image = Image(content, name, current_user)
-        db.session.add(image)
-        db.session.commit()
-
-        return {'id': image.id}
+        return self.process()
 
     def put(self, image_id):
         image = get_entities(Image, id=image_id)
         if not image:
             return {'error': ('You either don\'t have the rights to update '
                               'this image, or it does not exist')}
-        image = image[0]
-        name, content, error, output = self.build_and_push()
-        if error:
-            return {'error': error, 'output': output}
+        return self.process()
 
-        if name and not image.name == name:
-            image.name = name
-        if content:
-            image.dockerfile = content
-        db.session.add(image)
-        db.session.commit()
-        return {"status": "Successfully updated the image"}
+    def process(self):
+        name, content, url = self.parse_request()
+        res = build_and_push.delay(name, content, url)
+
+        return {'status': 'Your image is being built', 'build_id': res.id}
 
     def delete(self, image_id):
         image = get_entities(Image, id=image_id)
@@ -344,7 +339,7 @@ class Images(ProtectedResource):
         db.session.commit()
         return {"status": "Successfully deleted the image"}
 
-    def build_and_push(self):
+    def parse_request(self):
         parser = reqparse.RequestParser()
         parser.add_argument('dockerfile', type=str)
         parser.add_argument('name', type=str, required=True)
@@ -356,46 +351,7 @@ class Images(ProtectedResource):
         name = args['name']
         url = args['repo_url']
 
-        error = None
-        output = []
-        folder = None
-
-        client = get_docker_client()
-
-        # TODO: async all the following
-
-        kwargs = {}
-        if content:
-            fileobj = BytesIO(content.encode('utf-8'))
-            kwargs['fileobj'] = fileobj
-        elif url:
-            folder = tempfile.mkdtemp()
-            hg_clone(url, folder)
-            dockerfile = os.path.join(folder, "Dockerfile")
-            if not os.path.exists(dockerfile):
-                error = "Repository has no file named 'Dockerfile'"
-            kwargs['path'] = folder
-        else:
-            error = "Must provide a dockerfile or a repository"
-        if error:
-            return None, None, error, None
-
-        error = "Build failed"
-        tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
-        result = client.build(tag=tag,
-                              **kwargs)
-        for line in result:
-            output.append(str(line))
-            if "Successfully built" in str(line):
-                error = None
-        if not error:
-            client.push(repository=tag,
-                        insecure_registry=app.config['DOCKER_REGISTRY_INSECURE'])
-
-        if folder:
-            shutil.rmtree(folder)
-
-        return name, content, error, output
+        return name, content, url
 
 
 class Pipelines(ProtectedResource):
@@ -687,6 +643,9 @@ api.add_resource(Register,
 api.add_resource(Images,
                  '/image',
                  '/image/<string:image_id>')
+api.add_resource(ImageBuild,
+                 '/image/build/<string:build_id>',
+                 '/image/build/<string:build_id>/<string:image_id>')
 api.add_resource(Pipelines,
                  '/pipeline',
                  '/pipeline/<string:pipeline_id>')
@@ -705,11 +664,7 @@ api.add_resource(LogWithdrawal,
                  '/execution/<string:job_id>/logs',
                  '/execution/<string:job_id>/logs/<string:last_id>')
 
-
 if __name__ == '__main__':
-    app.config.from_object('config.Config')
-    app.config.from_envvar('KABUTO_CONFIG', silent=True)
-    set_ldap_manager(app)
     db.create_all()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])

@@ -1,6 +1,28 @@
 from contextlib import contextmanager
-
+from flask import Flask
+from flask_bcrypt import Bcrypt
+from flask_sqlalchemy import SQLAlchemy
+from flask_ldap3_login import LDAP3LoginManager
+from flask_login import LoginManager
+import flask_restful as restful
 import pika
+import os
+
+
+def make_app(config=None):
+    if not config:
+        config = 'config.Config'
+    app = Flask(__name__)
+    app.config.from_object(config)
+    app.config.from_envvar('KABUTO_CONFIG', silent=True)
+    api = restful.Api(app)
+    login_manager = LoginManager(app)
+    ldap_manager = None
+    if app.config['LDAP_HOST']:
+        ldap_manager = LDAP3LoginManager(app)
+    db = SQLAlchemy(app)
+    bcrypt = Bcrypt(app)
+    return app, api, login_manager, ldap_manager, db, bcrypt
 
 
 @contextmanager

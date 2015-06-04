@@ -29,7 +29,6 @@ def test_logs(preloaded_client):
     url = "/execution/%s/logs" % job.id
     r = ac.get(url)
     data = json.loads(r.data.decode('utf-8'))
-    print(data)
     line = data[0]
     assert line['logline'] == log_line
 

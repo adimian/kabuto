@@ -1,3 +1,4 @@
+import kabuto.tests.conftest
 from kabuto.api import db, Job
 import zipfile
 from io import BytesIO

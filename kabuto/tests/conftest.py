@@ -1,10 +1,12 @@
 import pytest
 from kabuto.api import app, db, User
+from kabuto.tasks import celery
 from kabuto.tests import sample_dockerfile
 from sqlalchemy.orm.exc import NoResultFound
 import json
 import os
 from unittest.mock import patch
+import time
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
@@ -23,17 +25,45 @@ class MockClient(object):
         pass
 
 
-class BrokenBuildMockClient(object):
-    def __init__(self, *args, **kwargs):
-        pass
+def mock_async_result(build_id):
+    class MockResult(object):
+        @property
+        def id(self):
+            return "some_id"
 
-    def build(self, *args, **kwargs):
-        return ["some output saying your build is unsuccessful"]
+        @property
+        def state(self):
+            return "SUCCESS"
+
+        def get(self):
+            return "hellozeworld", sample_dockerfile, "", ""
+    return MockResult()
+
+
+def mock_broken_async_result(build_id):
+    class MockResult(object):
+        @property
+        def id(self):
+            return "some_id"
+
+        @property
+        def state(self):
+            return "SUCCESS"
+
+        def get(self):
+            return ("hellozeworld",
+                    sample_dockerfile,
+                    "Build failed",
+                    ["some output saying your build is unsuccessful"])
+    return MockResult()
 
 
 @pytest.fixture
 def client():
-    app.config.from_object('kabuto.config.TestingConfig')
+    app.config.from_object('config.TestingConfig')
+    celery.conf.update({"CELERY_ALWAYS_EAGER": True,
+                        "CELERY_EAGER_PROPAGATES_EXCEPTIONS": True,
+                        "BROKER_BACKEND": 'memory'})
     db.create_all()
     try:
         User.query.filter_by(login='me').one()
@@ -72,20 +102,39 @@ def preloaded_client_with_attachments(authenticated_client):
     return authenticated_client
 
 
+@patch('docker.Client', MockClient)
+@patch('tasks.build_and_push.AsyncResult', mock_async_result)
 def preload(client, data):
-    with patch('docker.Client', MockClient):
-        rv = client.post('/image',
-                         data={'dockerfile': sample_dockerfile,
-                               'name': 'hellozeworld'})
-        image_id = json.loads(rv.data.decode('utf-8'))['id']
+    rv = client.post('/image',
+                     data={'dockerfile': sample_dockerfile,
+                           'name': 'hellozeworld'})
+    build_id = json.loads(rv.data.decode('utf-8'))['build_id']
 
-        rv = client.post('/pipeline',
-                         data={'name': 'my first pipeline'})
-        pipeline_id = json.loads(rv.data.decode('utf-8'))['id']
+    image_id = poll_for_image_id(client, build_id)['id']
 
-        data['image_id'] = str(image_id)
-        rv = client.post('/pipeline/%s/job' % pipeline_id,
-                         data=data)
-        job_id = json.loads(rv.data.decode('utf-8'))['id']
-        assert job_id is not None
-        return image_id, pipeline_id, job_id
+    rv = client.post('/pipeline',
+                     data={'name': 'my first pipeline'})
+    pipeline_id = json.loads(rv.data.decode('utf-8'))['id']
+
+    data['image_id'] = str(image_id)
+    rv = client.post('/pipeline/%s/job' % pipeline_id,
+                     data=data)
+    job_id = json.loads(rv.data.decode('utf-8'))['id']
+    assert job_id is not None
+    return image_id, pipeline_id, job_id
+
+
+def poll_for_image_id(client, build_id):
+    def wait_for_image():
+        rv = client.get('image/build/%s' % build_id)
+        build_data = json.loads(rv.data.decode('utf-8'))
+        return build_data
+
+    build_data = wait_for_image()
+    state = build_data['state']
+    while state == 'PENDING':
+        time.sleep(1)
+        build_data = wait_for_image()
+        state = build_data['state']
+
+    return build_data

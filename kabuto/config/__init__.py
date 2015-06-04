@@ -9,6 +9,10 @@ class Config(object):
     AMQP_HOSTNAME = 'localhost'
     AMQP_USER = 'kabuto'
     AMQP_PASSWORD = 'kabuto'
+    CELERY_BROKER_URL = 'amqp://%s:%s@%s:5672/celery' % (AMQP_USER,
+                                                         AMQP_PASSWORD,
+                                                         AMQP_HOSTNAME)
+    CELERY_RESULT_BACKEND = CELERY_BROKER_URL
     SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/kabuto.db'
     DOCKER_CLIENT = 'unix://var/run/docker.sock'
     DOCKER_REGISTRY_URL = 'localhost:7900'

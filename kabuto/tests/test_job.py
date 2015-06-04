@@ -6,19 +6,22 @@ import os
 import zipfile
 from io import BytesIO
 from unittest.mock import patch
-from kabuto.tests.conftest import MockClient
+from kabuto.tests.conftest import MockClient, mock_async_result, poll_for_image_id
 
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 
+@patch('tasks.build_and_push.AsyncResult', mock_async_result)
 def test_create_job(authenticated_client):
     with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
     assert rv.status_code == 200
-    image_id = json.loads(rv.data.decode('utf-8'))['id']
+    build_id = json.loads(rv.data.decode('utf-8'))['build_id']
+    build_data = poll_for_image_id(authenticated_client, build_id)
+    image_id = build_data['id']
 
     rv = authenticated_client.post('/pipeline',
                                    data={'name': 'my first pipeline'})
@@ -46,13 +49,16 @@ def test_create_job(authenticated_client):
     assert data['error'] == "Pipeline not found"
 
 
+@patch('tasks.build_and_push.AsyncResult', mock_async_result)
 def test_create_job_with_attachment(authenticated_client):
     with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
                                        data={'dockerfile': sample_dockerfile,
                                              'name': 'hellozeworld'})
     assert rv.status_code == 200
-    image_id = json.loads(rv.data.decode('utf-8'))['id']
+    build_id = json.loads(rv.data.decode('utf-8'))['build_id']
+    build_data = poll_for_image_id(authenticated_client, build_id)
+    image_id = build_data['id']
 
     rv = authenticated_client.post('/pipeline',
                                    data={'name': 'my not so first pipeline'})
@@ -97,6 +103,7 @@ def test_get_details(client):
     assert jobs[str(jid2)]["pipeline"]["id"] == pid2
 
 
+@patch('tasks.build_and_push.AsyncResult', mock_async_result)
 def test_get_job_details(authenticated_client):
     client = authenticated_client
     data = {'command': 'echo hello world'}
@@ -104,7 +111,9 @@ def test_get_job_details(authenticated_client):
         rv = client.post('/image',
                          data={'dockerfile': sample_dockerfile,
                                'name': 'hellozeworld'})
-        image_id = json.loads(rv.data.decode('utf-8'))['id']
+        build_id = json.loads(rv.data.decode('utf-8'))['build_id']
+        build_data = poll_for_image_id(authenticated_client, build_id)
+        image_id = build_data['id']
 
         rv = client.post('/pipeline',
                          data={'name': 'my first pipeline'})

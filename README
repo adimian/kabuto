@@ -65,14 +65,23 @@ An image is the api representation of a docker container. To make an image you w
 The contents of the docker file is a literal string, so spacing and newlines are important.
 The api will take care of creating and registering the docker image.
 
+The building of the image is done asynchronous. So upon creating an image, you will recieve a build_id.
+With this build_id you can query the api to see the state of the build.
+Once the build is complete you will recieve the image id.
+
 required data
 -------------
 name: String
 dockerfile: Literal string
+repo_url: url to mercurial repository containing a dockerfile
+
+Note that either you give a dockerfile or a repo_url. The 'dockerfile' parameter is handled over the 'repo_url' parameter when both are given.
+Meaning 'repo_url' will be ignored.
 
 Return value:
 -------------
-JSON {"id": <value>}
+JSON {"status": <value>,
+	  "build_id": <build_id>}
 
 curl example
 ------------
@@ -89,7 +98,7 @@ r = requests.post('%s/image' % base_url,
                       data={'dockerfile': sample_dockerfile,
                             'name': 'test'},
                       cookies=c)
-image_id = r.json()['id']
+build_id = r.json()['build_id']
 
 retrieving image data
 ---------------------
@@ -100,6 +109,39 @@ Data: JSON {"<image_id>":{"id": <image_id>,
 						  "name": <image_name>,
 					      "dockerfile": <dockerfile contents>,
 						  "creation_date": <date of creation>}}
+						  
+Querying Image build information
+================================
+Querying build information can yield different outputs depending on the state of the build.
+One key will always be present: 'state'
+
+The different possible states are: SUCCESS, FAILED and PENDING.
+
+Return value:
+-------------
+State: PENDING
+JSON {"state": <value>}
+
+State: FAILED
+JSON {"state": <value>,
+	  "error": <value>,
+	  "output": <build_output>}
+
+State: SUCCESS
+JSON {"state": <value>,
+	  "id": <image_id>,
+	  "output": <build_output>}
+	  
+curl example
+------------
+$ curl http://127.0.0.1:5000/image/build/<build_id> -b /tmp/cookies.txt
+
+python example
+--------------
+r = requests.post('%s/image/build/%s' % (base_url, build_id),
+                      cookies=c)
+state = r.json()['state']
+
 
 Creating a Pipeline
 ===================
