@@ -513,10 +513,12 @@ class LogDeposit(restful.Resource):
             abort(404)
 
         parser = reqparse.RequestParser()
-        parser.add_argument('log_line', type=str)
+        parser.add_argument('log_line')
         args = parser.parse_args()
 
-        db.session.add(ExecutionLog(job, args['log_line']))
+        lines = json.loads(args['log_line'])
+        for line in lines:
+            db.session.add(ExecutionLog(job, line))
         db.session.commit()
 
 

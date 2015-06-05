@@ -11,7 +11,8 @@ def test_logs(preloaded_client):
     db.session.add(job)
     db.session.commit()
 
-    log_line = "A log line"
+    log_line_text = "A log line"
+    log_line = json.dumps([log_line_text])
     wrong_url = "/execution/%s/log/%s" % (job.id, "wrong_token")
     r = ac.post(wrong_url, data={"log_line": log_line})
     assert r.status_code == 404
@@ -30,10 +31,11 @@ def test_logs(preloaded_client):
     r = ac.get(url)
     data = json.loads(r.data.decode('utf-8'))
     line = data[0]
-    assert line['logline'] == log_line
+    assert line['logline'] == log_line_text
 
     # deposit a new one
-    log_line = "Another log line"
+    log_line_text = "Another log line"
+    log_line = json.dumps([log_line_text])
     url = "/execution/%s/log/%s" % (job.id, job.results_token)
     ac.post(url, data={"log_line": log_line})
 
@@ -42,4 +44,4 @@ def test_logs(preloaded_client):
     r = ac.get(url)
     data = json.loads(r.data.decode('utf-8'))
     line = data[0]
-    assert line['logline'] == log_line
+    assert line['logline'] == log_line_text

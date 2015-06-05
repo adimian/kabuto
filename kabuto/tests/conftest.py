@@ -133,6 +133,7 @@ def poll_for_image_id(client, build_id):
     build_data = wait_for_image()
     state = build_data['state']
     while state == 'PENDING':
+        print("state is pending, waiting for 1s")
         time.sleep(1)
         build_data = wait_for_image()
         state = build_data['state']
