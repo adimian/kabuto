@@ -73,7 +73,8 @@ required data
 -------------
 name: String
 dockerfile: Literal string
-repo_url: url to mercurial repository containing a dockerfile
+repo_url: Url to mercurial repository containing a dockerfile
+nocache: When building, will not use cache when true is given. Defaults to false when not provided. 
 
 Note that either you give a dockerfile or a repo_url. The 'dockerfile' parameter is handled over the 'repo_url' parameter when both are given.
 Meaning 'repo_url' will be ignored.
@@ -85,7 +86,7 @@ JSON {"status": <value>,
 
 curl example
 ------------
-$ curl http://127.0.0.1:5000/image -X POST -d "name=test&dockerfile=@/path/to/some/docker_file" -b /tmp/cookies.txt
+$ curl http://127.0.0.1:5000/image -X POST -d "name=test&dockerfile=@/path/to/some/docker_file&nocache=false" -b /tmp/cookies.txt
 
 Note how we include the cookies to tell the server it is me.
 

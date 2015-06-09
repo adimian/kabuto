@@ -322,8 +322,8 @@ class Images(ProtectedResource):
         return self.process()
 
     def process(self):
-        name, content, url = self.parse_request()
-        res = build_and_push.delay(name, content, url)
+        name, content, url, nocache = self.parse_request()
+        res = build_and_push.delay(name, content, url, nocache)
 
         return {'status': 'Your image is being built', 'build_id': res.id}
 
@@ -344,14 +344,16 @@ class Images(ProtectedResource):
         parser.add_argument('dockerfile', type=str)
         parser.add_argument('name', type=str, required=True)
         parser.add_argument('repo_url', type=str)
+        parser.add_argument('nocache', type=str, default="false")
 
         args = parser.parse_args()
 
         content = args['dockerfile']
         name = args['name']
         url = args['repo_url']
+        nocache = str(args['nocache']).lower() == 'true'
 
-        return name, content, url
+        return name, content, url, nocache
 
 
 class Pipelines(ProtectedResource):

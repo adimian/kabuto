@@ -38,7 +38,7 @@ def get_docker_client():
 
 
 @celery.task(name='tasks.build_and_push')
-def build_and_push(name, content=None, url=None):
+def build_and_push(name, content=None, url=None, nocache=False):
     error = None
     output = []
     folder = None
@@ -47,7 +47,7 @@ def build_and_push(name, content=None, url=None):
 
     # TODO: async all the following
 
-    kwargs = {}
+    kwargs = {"nocache": nocache}
     if content:
         fileobj = BytesIO(content.encode('utf-8'))
         kwargs['fileobj'] = fileobj
