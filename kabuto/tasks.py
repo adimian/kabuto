@@ -6,6 +6,7 @@ from hgapi import hg_clone
 import docker
 from utils import make_app
 from celery import Celery
+import json
 
 
 def make_celery(config=None):
@@ -67,7 +68,7 @@ def build_and_push(name, content=None, url=None):
     result = client.build(tag=tag,
                           **kwargs)
     for line in result:
-        output.append(str(line))
+        output.append(json.loads(line.decode()))
         if "Successfully built" in str(line):
             error = None
     if not error:
