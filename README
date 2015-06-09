@@ -123,7 +123,11 @@ Return value:
 State: PENDING
 JSON {"state": <value>}
 
-State: FAILED
+State: FAILURE (occurs when there is an error in the process that is building the image)
+JSON {"state": <value>,
+	  "error": <value>}
+
+State: FAILED (occurs when the build has failed)
 JSON {"state": <value>,
 	  "error": <value>,
 	  "output": <build_output>}

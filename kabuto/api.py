@@ -281,9 +281,9 @@ class ImageBuild(ProtectedResource):
             image = image[0]
 
         res = build_and_push.AsyncResult(build_id)
-        if res and res.state == 'FAILED':
-            return {'state': res.state, 'error': 'Unknown error'}
-        elif res.state == 'SUCCESS':
+        if res and res.state == 'FAILURE':
+            return {'state': res.state, 'error': res.traceback}
+        elif res and res.state == 'SUCCESS':
             name, content, error, output = res.get()
             if error:
                 return {'state': 'FAILED',
