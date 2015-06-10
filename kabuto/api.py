@@ -12,9 +12,11 @@ from flask_login import (login_required, login_user,
 from flask_restful import reqparse
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import OperationalError
 from werkzeug.datastructures import FileStorage
 import flask_restful as restful
 from flask_ldap3_login import AuthenticationResponseStatus as ars
+import time
 
 from mailer import send_token
 from utils import publish_job, make_app
@@ -669,6 +671,25 @@ api.add_resource(LogWithdrawal,
                  '/execution/<string:job_id>/logs/<string:last_id>')
 
 if __name__ == '__main__':
-    db.create_all()
+    def create_db(timeout):
+        try:
+            db.create_all()
+        except OperationalError as error:
+            app.logger.error("Could not connect. Retrying in %ss" % timeout)
+            time.sleep(timeout)
+            return error
+        return None
+
+    timeout = 1
+    while timeout <= 8:
+        error = create_db(timeout)
+        if error:
+            timeout = timeout * 2
+        else:
+            break
+
+    if error:
+        raise error
+
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])
