@@ -555,8 +555,8 @@ class Attachment(restful.Resource):
             return send_file(zip_file,
                              as_attachment=True,
                              attachment_filename=os.path.basename(zip_file))
-        except Exception:
-            return "Something went wrong, contact your admin"
+        except Exception as error:
+            return "Something went wrong, contact your admin: %s" % error
 
     def post(self, job_id, token):
         try:
