@@ -209,21 +209,7 @@ def load_user(login):
 
 
 def prepare_entity_dict(entity, entity_id, **kwargs):
-    kwargs["owner"] = current_user
-    if entity_id:
-        kwargs["id"] = entity_id
-    if isinstance(entity, list):
-        base_class, join_class = entity
-        query = db.session.query(base_class).join(join_class)
-        query = query.filter(join_class.owner == current_user)
-        base_id, join_id = entity_id
-        if base_id:
-            query = query.filter(base_class.id == base_id)
-        if join_id:
-            query = query.filter(join_class.id == join_id)
-        entity_list = query.all()
-    else:
-        entity_list = entity.query.filter_by(**kwargs).all()
+    entity_list = get_entities(entity, entity_id, **kwargs)
     entity_dict = {}
     for entity in entity_list:
         entity_dict[entity.id] = entity.as_dict()
@@ -242,10 +228,23 @@ def get_folder_as_zip(zip_name, folder_to_zip):
     return zip_file
 
 
-def get_entities(entity, **kwargs):
-    if not entity == User:
-        kwargs["owner"] = current_user
-    return entity.query.filter_by(**kwargs).all()
+def get_entities(entity, entity_id, **kwargs):
+    kwargs["owner"] = current_user
+    if entity_id:
+        kwargs["id"] = entity_id
+    if isinstance(entity, list):
+        base_class, join_class = entity
+        query = db.session.query(base_class).join(join_class)
+        query = query.filter(join_class.owner == current_user)
+        base_id, join_id = entity_id
+        if base_id:
+            query = query.filter(base_class.id == base_id)
+        if join_id:
+            query = query.filter(join_class.id == join_id)
+        entity_list = query.all()
+    else:
+        entity_list = entity.query.filter_by(**kwargs).all()
+    return entity_list
 
 
 class Login(restful.Resource):
@@ -277,7 +276,7 @@ class Login(restful.Resource):
 class ImageBuild(ProtectedResource):
     def get(self, build_id, image_id=None):
         if image_id:
-            image = get_entities(Image, id=image_id)
+            image = get_entities(Image, image_id)
             if not image:
                 return {'error': 'could not find image with id %s' % image_id}
             image = image[0]
@@ -287,7 +286,6 @@ class ImageBuild(ProtectedResource):
             return {'state': res.state, 'error': res.traceback}
         elif res and res.state == 'SUCCESS':
             result = res.get()
-            print(result)
             if result.get("error"):
                 return {'state': 'FAILED',
                         'error': result["error"],
@@ -318,7 +316,7 @@ class Images(ProtectedResource):
         return self.process()
 
     def put(self, image_id):
-        image = get_entities(Image, id=image_id)
+        image = get_entities(Image, image_id)
         if not image:
             return {'error': ('You either don\'t have the rights to update '
                               'this image, or it does not exist')}
@@ -330,7 +328,7 @@ class Images(ProtectedResource):
         return {'status': 'Your image is being built', 'build_id': res.id}
 
     def delete(self, image_id):
-        image = get_entities(Image, id=image_id)
+        image = get_entities(Image, image_id)
         if not image:
             return {'error': ('You either don\'t have the rights to update '
                               'this image, or it does not exist')}
@@ -385,7 +383,7 @@ class Pipelines(ProtectedResource):
         return {'id': pipeline.id}
 
     def put(self, pipeline_id):
-        pl = get_entities(Pipeline, id=pipeline_id)
+        pl = get_entities(Pipeline, pipeline_id)
         if not pl:
             return {'error': ('You either don\'t have the rights to update '
                               'this image, or it does not exist')}
@@ -432,7 +430,7 @@ class Pipelines(ProtectedResource):
         return return_dict
 
     def delete(self, pipeline_id):
-        pipeline = get_entities(Pipeline, id=pipeline_id)
+        pipeline = get_entities(Pipeline, pipeline_id)
         if not pipeline:
             return {'error': ('You either don\'t have the rights to update '
                               'this pipeline, or it does not exist')}
@@ -489,6 +487,43 @@ class Jobs(ProtectedResource):
             return {"error": "Image not found"}
 
         job = Job(pipeline, image, path, args['command'])
+
+        db.session.add(job)
+        db.session.commit()
+
+        return {'id': job.id}
+
+    def put(self, pipeline_id, job_id):
+        job = get_entities([Job, Pipeline], [job_id, pipeline_id])
+        if not job:
+            return {'error': ('You either don\'t have the rights to update '
+                              'this image, or it does not exist')}
+        job = job[0]
+        parser = reqparse.RequestParser()
+        parser.add_argument('image_id', type=str)
+        parser.add_argument('command', type=str)
+
+        parser.add_argument('attachments', type=FileStorage, location='files',
+                            action='append', default=[])
+        args = parser.parse_args()
+
+        path = job.attachments_path
+        for filestorage in args['attachments']:
+            with open(os.path.join(path, filestorage.filename), "wb+") as fh:
+                fh.write(filestorage.read())
+
+        if args.get('image_id'):
+            try:
+                image = Image.query.filter_by(id=args['image_id']).one()
+            except NoResultFound:
+                return {"error": "Image not found"}
+            if not image.id == job.image.id:
+                job.image = image
+
+        command = args.get('command')
+        if command:
+            if not command == job.command:
+                job.command = command
 
         db.session.add(job)
         db.session.commit()

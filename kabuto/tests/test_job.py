@@ -50,6 +50,40 @@ def test_create_job(authenticated_client):
 
 
 @patch('tasks.build_and_push.AsyncResult', mock_async_result)
+def test_attach_files_post_create_job(authenticated_client):
+    with patch('docker.Client', MockClient):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld'})
+    assert rv.status_code == 200
+    build_id = json.loads(rv.data.decode('utf-8'))['build_id']
+    build_data = poll_for_image_id(authenticated_client, build_id)
+    image_id = build_data['id']
+
+    rv = authenticated_client.post('/pipeline',
+                                   data={'name': 'my first pipeline'})
+    assert rv.status_code == 200
+    pipeline_id = json.loads(rv.data.decode('utf-8'))['id']
+
+    authenticated_client.post('/pipeline/%s/job' % pipeline_id,
+                              data={'image_id': image_id,
+                                    'command': 'echo hello world'})
+    assert rv.status_code == 200
+    job_id = json.loads(rv.data.decode('utf-8'))['id']
+
+    attachments_path = Job.query.filter_by(id=job_id).one().attachments_path
+    assert len(os.listdir(attachments_path)) == 0
+    attachments = [(open(os.path.join(ROOT_DIR, "data", "file1.txt"), "rb"),
+                    'test1.txt'),
+                   (open(os.path.join(ROOT_DIR, "data", "file2.txt"), "rb"),
+                    'test2.txt')]
+    authenticated_client.put('/pipeline/%s/job/%s' % (pipeline_id, job_id),
+                             data={'command': 'echo hello world2',
+                                   'attachments': attachments})
+    assert len(os.listdir(attachments_path)) == 2
+
+
+@patch('tasks.build_and_push.AsyncResult', mock_async_result)
 def test_create_job_with_attachment(authenticated_client):
     with patch('docker.Client', MockClient):
         rv = authenticated_client.post('/image',
