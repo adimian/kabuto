@@ -286,25 +286,26 @@ class ImageBuild(ProtectedResource):
         if res and res.state == 'FAILURE':
             return {'state': res.state, 'error': res.traceback}
         elif res and res.state == 'SUCCESS':
-            name, content, error, output = res.get()
-            if error:
+            result = res.get()
+            print(result)
+            if result.get("error"):
                 return {'state': 'FAILED',
-                        'error': error,
-                        'output': output}
+                        'error': result["error"],
+                        'output': result.get("output")}
             if image_id:
-                if name and not image.name == name:
-                    image.name = name
-                if content:
-                    image.dockerfile = content
+                if result.get("name") and not image.name == result["name"]:
+                    image.name = result["name"]
+                if result.get("content"):
+                    image.dockerfile = result["content"]
                 db.session.add(image)
                 db.session.commit()
             else:
-                image = Image(content, name, current_user)
+                image = Image(result["content"], result["name"], current_user)
                 db.session.add(image)
                 db.session.commit()
             return {'state': res.state,
                     'id': image.id,
-                    'output': output}
+                    'output': result["output"]}
         else:
             return {'state': res.state}
 
@@ -324,8 +325,7 @@ class Images(ProtectedResource):
         return self.process()
 
     def process(self):
-        name, content, url, nocache = self.parse_request()
-        res = build_and_push.delay(name, content, url, nocache)
+        res = build_and_push.delay(self.parse_request())
 
         return {'status': 'Your image is being built', 'build_id': res.id}
 
@@ -343,19 +343,29 @@ class Images(ProtectedResource):
 
     def parse_request(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('dockerfile', type=str)
+        parser.add_argument('dockerfile', type=str, default=None)
         parser.add_argument('name', type=str, required=True)
-        parser.add_argument('repo_url', type=str)
+        parser.add_argument('repo_url', type=str, default=None)
         parser.add_argument('nocache', type=str, default="false")
-
+        parser.add_argument('attachments', type=FileStorage, location='files',
+                            action='append', default=[])
         args = parser.parse_args()
 
+        path = tempfile.mkdtemp()
+        for filestorage in args['attachments']:
+            with open(os.path.join(path, filestorage.filename), "wb+") as fh:
+                fh.write(filestorage.read())
+
         content = args['dockerfile']
+        if content:
+            with open(os.path.join(path, "dockerfile"), "wb+") as fh:
+                fh.write(bytes(content, 'UTF-8'))
         name = args['name']
         url = args['repo_url']
         nocache = str(args['nocache']).lower() == 'true'
 
-        return name, content, url, nocache
+        return {"path": path, "name": name, "content": content,
+                "url": url, "nocache": nocache}
 
 
 class Pipelines(ProtectedResource):

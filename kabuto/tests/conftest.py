@@ -36,7 +36,8 @@ def mock_async_result(build_id):
             return "SUCCESS"
 
         def get(self):
-            return "hellozeworld", sample_dockerfile, "", ""
+            return {"name": "hellozeworld", "content": sample_dockerfile,
+                    "error": "", "output": ""}
     return MockResult()
 
 
@@ -51,10 +52,10 @@ def mock_broken_async_result(build_id):
             return "SUCCESS"
 
         def get(self):
-            return ("hellozeworld",
-                    sample_dockerfile,
-                    "Build failed",
-                    ["some output saying your build is unsuccessful"])
+            return {"name": "hellozeworld",
+                    "content": sample_dockerfile,
+                    "error": "Build failed",
+                    "output": ["some output saying your build is unsuccessful"]}
     return MockResult()
 
 

@@ -37,8 +37,16 @@ def get_docker_client():
     return client
 
 
+class BuildResult(object):
+    def __init__(self, name=None, content=None, error=None, output=None):
+        self.name = name
+        self.content = content
+        self.error = error
+        self.output = output
+
+
 @celery.task(name='tasks.build_and_push')
-def build_and_push(name, content=None, url=None, nocache=False):
+def build_and_push(args):
     error = None
     output = []
     folder = None
@@ -47,24 +55,23 @@ def build_and_push(name, content=None, url=None, nocache=False):
 
     # TODO: async all the following
 
-    kwargs = {"nocache": nocache}
-    if content:
-        fileobj = BytesIO(content.encode('utf-8'))
-        kwargs['fileobj'] = fileobj
-    elif url:
+    kwargs = {"nocache": args["nocache"]}
+    if args["url"]:
         folder = tempfile.mkdtemp()
-        hg_clone(url, folder)
+        hg_clone(args["url"], folder)
         dockerfile = os.path.join(folder, "Dockerfile")
         if not os.path.exists(dockerfile):
             error = "Repository has no file named 'Dockerfile'"
         kwargs['path'] = folder
+    elif args["path"]:
+        kwargs['path'] = args["path"]
     else:
         error = "Must provide a dockerfile or a repository"
     if error:
-        return None, None, error, None
+        return {"error": error}
 
     error = "Build failed"
-    tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], name))
+    tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], args["name"]))
     result = client.build(tag=tag,
                           **kwargs)
     for line in result:
@@ -77,5 +84,8 @@ def build_and_push(name, content=None, url=None, nocache=False):
 
     if folder:
         shutil.rmtree(folder)
+    if args["path"]:
+        shutil.rmtree(args["path"])
 
-    return name, content, error, output
+    return {"name": args["name"], "content": args["content"],
+            "error": error, "output": output}

@@ -73,11 +73,12 @@ required data
 -------------
 name: String
 dockerfile: Literal string
+attachments: File(s) (only when using dockerfile)
 repo_url: Url to mercurial repository containing a dockerfile
 nocache: When building, will not use cache when true is given. Defaults to false when not provided. 
 
-Note that either you give a dockerfile or a repo_url. The 'dockerfile' parameter is handled over the 'repo_url' parameter when both are given.
-Meaning 'repo_url' will be ignored.
+Note that either you give a dockerfile or a repo_url. The 'repo_url' parameter is handled over the 'dockerfile' parameter when both are given.
+Meaning 'dockerfile' will be ignored.
 
 Return value:
 -------------
@@ -143,7 +144,7 @@ $ curl http://127.0.0.1:5000/image/build/<build_id> -b /tmp/cookies.txt
 
 python example
 --------------
-r = requests.post('%s/image/build/%s' % (base_url, build_id),
+r = requests.get('%s/image/build/%s' % (base_url, build_id),
                       cookies=c)
 state = r.json()['state']
 
@@ -215,8 +216,8 @@ python example
 --------------
 data = {'command': 'echo hello world',
         'image_id': image_id}
-files = [("attachments", open("/path/to/file1"), "rb")),
-         ("attachments", open("/path/to/file2"), "rb"))]
+files = [("attachments", open("/path/to/file1", "rb")),
+         ("attachments", open("/path/to/file2", "rb"))]
 r = requests.post('%s/pipeline/%s/job' % (base_url, pipeline_id),
                   data=data,
                   files=files,

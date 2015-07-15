@@ -4,6 +4,8 @@ from unittest.mock import patch
 from kabuto.api import Image
 from kabuto.tests.conftest import (MockClient, ROOT_DIR, poll_for_image_id,
                                    mock_async_result, mock_broken_async_result)
+from flask_restful import reqparse
+from werkzeug.datastructures import FileStorage
 import os
 import hgapi
 import shutil
@@ -57,6 +59,30 @@ def test_create_image(authenticated_client):
     image_id = build_data['id']
     assert image_id is not None
     rm_hg(url)
+
+
+@patch('docker.Client', MockClient)
+@patch('tasks.build_and_push.AsyncResult', mock_async_result)
+def test_create_image_with_attachments(authenticated_client):
+    attachments = [(open(os.path.join(ROOT_DIR, "data", "file1.txt"), "rb"),
+                    'test1.txt'),
+                   (open(os.path.join(ROOT_DIR, "data", "file2.txt"), "rb"),
+                    'test2.txt')]
+
+    def mock_parse(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('attachments', type=FileStorage, location='files',
+                            action='append', default=[])
+        args = parser.parse_args()
+        assert len(args["attachments"]) == 2
+        return {}
+
+    with patch('kabuto.api.Images.parse_request',
+               mock_parse):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': sample_dockerfile,
+                                             'name': 'hellozeworld',
+                                             'attachments': attachments})
 
 
 @patch('docker.Client', MockClient)
