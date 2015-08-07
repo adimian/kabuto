@@ -37,6 +37,8 @@ class Config(object):
     LDAP_BIND_USER_DN = ''  # The Username to bind to LDAP with
     LDAP_BIND_USER_PASSWORD = ''
 
+    SENTRY_DSN = ''
+
 
 class TestingConfig(Config):
     DEBUG = True

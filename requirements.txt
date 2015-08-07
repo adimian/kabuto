@@ -13,3 +13,5 @@ python3-pika==0.9.14
 flask-ldap3-login==0.9.7
 hgapi==1.7.2
 celery==3.1.18
+raven==5.5.0
+blinker==1.4

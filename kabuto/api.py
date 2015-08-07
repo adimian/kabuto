@@ -356,7 +356,7 @@ class Images(ProtectedResource):
 
         content = args['dockerfile']
         if content:
-            with open(os.path.join(path, "dockerfile"), "wb+") as fh:
+            with open(os.path.join(path, "Dockerfile"), "wb+") as fh:
                 fh.write(bytes(content, 'UTF-8'))
         name = args['name']
         url = args['repo_url']

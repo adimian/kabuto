@@ -4,9 +4,18 @@ from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_ldap3_login import LDAP3LoginManager
 from flask_login import LoginManager
+from raven.contrib.flask import Sentry
 import flask_restful as restful
 import pika
 import os
+
+OVERRIDES = ('SECRET_KEY',
+             'SQLALCHEMY_DATABASE_URI',
+             'SENTRY_DSN')
+
+
+def read_config(config, key):
+    config[key] = os.environ.get(key, config[key])
 
 
 def make_app(config=None):
@@ -15,6 +24,9 @@ def make_app(config=None):
     app = Flask(__name__)
     app.config.from_object(config)
     app.config.from_envvar('KABUTO_CONFIG', silent=True)
+    for key in OVERRIDES:
+        read_config(app.config, key)
+
     api = restful.Api(app)
     login_manager = LoginManager(app)
     ldap_manager = None
@@ -22,6 +34,10 @@ def make_app(config=None):
         ldap_manager = LDAP3LoginManager(app)
     db = SQLAlchemy(app)
     bcrypt = Bcrypt(app)
+    if app.config['SENTRY_DSN']:
+        Sentry(app)
+    else:
+        print("sentry not enabled !")
     return app, api, login_manager, ldap_manager, db, bcrypt
 
 
