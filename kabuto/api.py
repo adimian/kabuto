@@ -715,7 +715,8 @@ api.add_resource(LogWithdrawal,
                  '/execution/<string:job_id>/logs',
                  '/execution/<string:job_id>/logs/<string:last_id>')
 
-if __name__ == '__main__':
+
+def init_db():
     def create_db(timeout):
         try:
             db.create_all()
@@ -736,5 +737,11 @@ if __name__ == '__main__':
     if error:
         raise error
 
+
+if __name__ == '__main__':
+    init_db()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])
+else:
+    # for gunicorn
+    init_db()
