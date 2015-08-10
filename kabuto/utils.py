@@ -5,6 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_ldap3_login import LDAP3LoginManager
 from flask_login import LoginManager
 from raven.contrib.flask import Sentry
+import uuid
 import flask_restful as restful
 import pika
 import os
@@ -45,7 +46,9 @@ def make_app(config=None):
 
 def get_working_dir(prefix=''):
     if current_app.config.get("KABUTO_WORKING_DIR", None):
-        return current_app.config["KABUTO_WORKING_DIR"]
+        base = current_app.config["KABUTO_WORKING_DIR"]
+        folder_name = '%s%s' % (prefix, uuid.uuid4())
+        return os.path.join(base, folder_name)
     return tempfile.mkdtemp(prefix=prefix)
 
 
