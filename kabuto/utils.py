@@ -45,7 +45,7 @@ def make_app(config=None):
 
 def get_working_dir(prefix=''):
     if current_app.config.get("KABUTO_WORKING_DIR", None):
-        return current_app["KABUTO_WORKING_DIR"]
+        return current_app.config["KABUTO_WORKING_DIR"]
     return tempfile.mkdtemp(prefix=prefix)
 
 
