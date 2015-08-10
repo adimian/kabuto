@@ -48,7 +48,9 @@ def get_working_dir(prefix=''):
     if current_app.config.get("KABUTO_WORKING_DIR", None):
         base = current_app.config["KABUTO_WORKING_DIR"]
         folder_name = '%s%s' % (prefix, uuid.uuid4())
-        return os.path.join(base, folder_name)
+        path = os.path.join(base, folder_name)
+        os.mkdir(path)
+        return path
     return tempfile.mkdtemp(prefix=prefix)
 
 
