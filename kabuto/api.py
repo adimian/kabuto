@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 import os
-import tempfile
 import uuid
 import zipfile
 
@@ -19,7 +18,7 @@ from flask_ldap3_login import AuthenticationResponseStatus as ars
 import time
 
 from mailer import send_token
-from utils import publish_job, make_app
+from utils import publish_job, make_app, get_working_dir
 from tasks import build_and_push, get_docker_client
 
 
@@ -155,7 +154,7 @@ class Job(db.Model):
         self.attachments_path = attachments
         self.attachments_token = str(uuid.uuid4())
         self.results_token = str(uuid.uuid4())
-        self.results_path = tempfile.mkdtemp(prefix='kabuto-outbox-')
+        self.results_path = get_working_dir(prefix='kabuto-outbox-')
         if not sequence:
             self.sequence_number = len(pipeline.jobs.all()) - 1
         else:
@@ -220,7 +219,7 @@ def prepare_entity_dict(entity, entity_id, **kwargs):
 
 
 def get_folder_as_zip(zip_name, folder_to_zip):
-    zip_file = "%s.zip" % os.path.join(tempfile.mkdtemp(),
+    zip_file = "%s.zip" % os.path.join(get_working_dir(),
                                        zip_name)
     zipf = zipfile.ZipFile(zip_file, 'w')
     if not os.path.isdir(folder_to_zip):
@@ -352,7 +351,7 @@ class Images(ProtectedResource):
                             action='append', default=[])
         args = parser.parse_args()
 
-        path = tempfile.mkdtemp()
+        path = get_working_dir()
         for filestorage in args['attachments']:
             with open(os.path.join(path, filestorage.filename), "wb+") as fh:
                 fh.write(filestorage.read())
@@ -474,7 +473,7 @@ class Jobs(ProtectedResource):
                             action='append', default=[])
         args = parser.parse_args()
 
-        path = tempfile.mkdtemp(prefix='kabuto-inbox-')
+        path = get_working_dir(prefix='kabuto-inbox-')
         for filestorage in args['attachments']:
             with open(os.path.join(path, filestorage.filename), "wb+") as fh:
                 fh.write(filestorage.read())

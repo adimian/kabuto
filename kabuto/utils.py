@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from flask import Flask
+from flask import Flask, current_app
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_ldap3_login import LDAP3LoginManager
@@ -8,10 +8,12 @@ from raven.contrib.flask import Sentry
 import flask_restful as restful
 import pika
 import os
+import tempfile
 
 OVERRIDES = ('SECRET_KEY',
              'SQLALCHEMY_DATABASE_URI',
-             'SENTRY_DSN')
+             'SENTRY_DSN',
+             'KABUTO_WORKING_DIR')
 
 
 def read_config(config, key):
@@ -39,6 +41,12 @@ def make_app(config=None):
     else:
         print("sentry not enabled !")
     return app, api, login_manager, ldap_manager, db, bcrypt
+
+
+def get_working_dir(prefix=''):
+    if current_app.config.get("KABUTO_WORKING_DIR", None):
+        return current_app["KABUTO_WORKING_DIR"]
+    return tempfile.mkdtemp(prefix=prefix)
 
 
 @contextmanager

@@ -9,6 +9,7 @@ class Config(object):
     AMQP_HOSTNAME = 'localhost'
     AMQP_USER = 'kabuto'
     AMQP_PASSWORD = 'kabuto'
+    KABUTO_WORKING_DIR = ''
     CELERY_BROKER_URL = 'amqp://%s:%s@%s:5672/celery' % (AMQP_USER,
                                                          AMQP_PASSWORD,
                                                          AMQP_HOSTNAME)

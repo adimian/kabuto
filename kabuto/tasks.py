@@ -1,10 +1,9 @@
 import shutil
 import os
-import tempfile
 from io import BytesIO
 from hgapi import hg_clone
 import docker
-from utils import make_app
+from utils import make_app, get_working_dir
 from celery import Celery
 import json
 
@@ -57,7 +56,7 @@ def build_and_push(args):
 
     kwargs = {"nocache": args["nocache"]}
     if args["url"]:
-        folder = tempfile.mkdtemp()
+        folder = get_working_dir()
         hg_clone(args["url"], folder)
         dockerfile = os.path.join(folder, "Dockerfile")
         if not os.path.exists(dockerfile):
