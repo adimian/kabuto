@@ -631,10 +631,11 @@ class Attachment(restful.Resource):
             with open(zip_dir, "wb+") as fh:
                 fh.write(args['results'].read())
 
-        with zipfile.ZipFile(zip_dir) as zf:
-            zf.extractall(job.results_path)
+        if os.path.exists(zip_dir):
+            with zipfile.ZipFile(zip_dir) as zf:
+                zf.extractall(job.results_path)
+                os.remove(zip_dir)
 
-        os.remove(zip_dir)
         job.state = args['state']
         job.used_cpu = args['cpu']
         job.used_memory = args['memory']

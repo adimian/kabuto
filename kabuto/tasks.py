@@ -2,6 +2,7 @@ import shutil
 import os
 from io import BytesIO
 from hgapi import hg_clone
+from hgapi.hgapi import HgException
 import docker
 from utils import make_app, get_working_dir
 from celery import Celery
@@ -57,11 +58,14 @@ def build_and_push(args):
     kwargs = {"nocache": args["nocache"]}
     if args["url"]:
         folder = get_working_dir()
-        hg_clone(args["url"], folder)
-        dockerfile = os.path.join(folder, "Dockerfile")
-        if not os.path.exists(dockerfile):
-            error = "Repository has no file named 'Dockerfile'"
-        kwargs['path'] = folder
+        try:
+            hg_clone(args["url"], folder)
+            dockerfile = os.path.join(folder, "Dockerfile")
+            if not os.path.exists(dockerfile):
+                error = "Repository has no file named 'Dockerfile'"
+            kwargs['path'] = folder
+        except HgException as e:
+            error = "Could not clone repository: %s" % e
     elif args["path"]:
         kwargs['path'] = args["path"]
     else:
