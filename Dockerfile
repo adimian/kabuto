@@ -21,6 +21,9 @@ ENV WORKERS=1
 ENV HOST=0.0.0.0
 ENV PORT=5000
 
+# Shared volume for kabuto and kabuto workers
+VOLUME /var/tmp
+
 WORKDIR /source
 
 USER www-data
