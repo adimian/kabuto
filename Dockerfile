@@ -26,5 +26,7 @@ VOLUME /var/tmp
 
 WORKDIR /source
 
+RUN echo docker:x:999:www-data >> /etc/group
+
 USER www-data
 CMD gunicorn --reload -w $WORKERS -b $HOST:$PORT kabuto.api:app
