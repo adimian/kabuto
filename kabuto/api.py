@@ -84,6 +84,7 @@ class Image(db.Model):
     name = db.Column(db.String(128))
     dockerfile = db.Column(db.Text)
 
+    tag = db.Column(db.String(128))
     creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
 
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -165,7 +166,8 @@ class Job(db.Model):
                            'image': self.image.name,
                            'command': self.command,
                            'attachment_token': self.attachments_token,
-                           'result_token': self.results_token})
+                           'result_token': self.results_token,
+                           'image_tag': self.image.tag})
 
     def as_dict(self):
         return {"id": self.id,
@@ -297,6 +299,8 @@ class ImageBuild(ProtectedResource):
                     image.name = result["name"]
                 if result.get("content"):
                     image.dockerfile = result["content"]
+                if result.get("tag"):
+                    image.tag = result["tag"]
                 db.session.add(image)
                 db.session.commit()
             else:
@@ -365,7 +369,7 @@ class Images(ProtectedResource):
         nocache = str(args['nocache']).lower() == 'true'
 
         return {"path": path, "name": name, "content": content,
-                "url": url, "nocache": nocache}
+                "url": url, "nocache": nocache, "user": current_user.login}
 
 
 class Pipelines(ProtectedResource):

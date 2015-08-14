@@ -53,8 +53,6 @@ def build_and_push(args):
 
     client = get_docker_client()
 
-    # TODO: async all the following
-
     kwargs = {"nocache": args["nocache"]}
     if args["url"]:
         folder = get_working_dir()
@@ -74,7 +72,8 @@ def build_and_push(args):
         return {"error": error}
 
     error = "Build failed"
-    tag = '/'.join((app.config['DOCKER_REGISTRY_URL'], args["name"]))
+    base_tag = "_".join(app.config['DOCKER_REGISTRY_URL'], args['user'])
+    tag = '/'.join((base_tag, args["name"]))
     result = client.build(tag=tag,
                           **kwargs)
     for line in result:
@@ -91,4 +90,4 @@ def build_and_push(args):
         shutil.rmtree(args["path"])
 
     return {"name": args["name"], "content": args["content"],
-            "error": error, "output": output}
+            "error": error, "output": output, "tag": tag}
