@@ -37,7 +37,7 @@ def mock_async_result(build_id):
 
         def get(self):
             return {"name": "hellozeworld", "content": sample_dockerfile,
-                    "error": "", "output": ""}
+                    "error": "", "output": "", "tag": "some_tag"}
     return MockResult()
 
 
