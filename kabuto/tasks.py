@@ -72,7 +72,7 @@ def build_and_push(args):
         return {"error": error}
 
     error = "Build failed"
-    base_tag = "_".join(app.config['DOCKER_REGISTRY_URL'], args['user'])
+    base_tag = "_".join((app.config['DOCKER_REGISTRY_URL'], args['user']))
     tag = '/'.join((base_tag, args["name"]))
     result = client.build(tag=tag,
                           **kwargs)
