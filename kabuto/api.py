@@ -305,6 +305,7 @@ class ImageBuild(ProtectedResource):
                 db.session.commit()
             else:
                 image = Image(result["content"], result["name"], current_user)
+                image.tag = result["tag"]
                 db.session.add(image)
                 db.session.commit()
             return {'state': res.state,
