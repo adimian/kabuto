@@ -287,7 +287,8 @@ class ImageBuild(ProtectedResource):
 
         res = build_and_push.AsyncResult(build_id)
         if res and res.state == 'FAILURE':
-            return {'state': res.state, 'error': res.traceback}
+            return {'state': res.state, 'error': 'Docker threw an error',
+                    'output': res.traceback}
         elif res and res.state == 'SUCCESS':
             result = res.get()
             if result.get("error"):

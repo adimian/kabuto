@@ -126,7 +126,8 @@ JSON {"state": <value>}
 
 State: FAILURE (occurs when there is an error in the process that is building the image)
 JSON {"state": <value>,
-	  "error": <value>}
+	  "error": <value>,
+	  "output": <traceback>}
 
 State: FAILED (occurs when the build has failed)
 JSON {"state": <value>,
