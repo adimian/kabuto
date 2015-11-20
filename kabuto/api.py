@@ -549,6 +549,7 @@ class KillJob(ProtectedResource):
         job = job[0]
         if job.state == 'running':
             if job.container_id:
+                print(SENDER)
                 SENDER.broadcast(job.container_id, 'kill')
             else:
                 return {'error': "Job didn't update properly, try again later"}

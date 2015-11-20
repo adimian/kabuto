@@ -1,6 +1,6 @@
 from kabuto.tests import sample_dockerfile
 from kabuto.tests.conftest import preload
-from kabuto.api import Job, Image, Pipeline, db, app
+from kabuto.api import Job, Image, Pipeline, db, app, SENDER
 import json
 import os
 import zipfile
@@ -10,6 +10,12 @@ from kabuto.tests.conftest import MockClient, mock_async_result, poll_for_image_
 
 
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
+
+
+def broadcast(*args, **kwargs):
+    pass
+
+SENDER.broadcast = broadcast
 
 
 @patch('tasks.build_and_push.AsyncResult', mock_async_result)
@@ -260,8 +266,7 @@ def test_kill_job(authenticated_client):
         db.session.commit()
         job_id = job.id
     result_url = '/pipeline/%s/job/%s/kill' % (job.pipeline_id, job.id)
-    with patch('kabuto.connection.Sender.broadcast'):
-        rv = authenticated_client.get(result_url)
+    rv = authenticated_client.get(result_url)
     assert rv.status_code == 200
     result = json.loads(rv.data.decode('utf-8'))
     print(result)
