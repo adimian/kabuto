@@ -10,7 +10,9 @@ ROOT_DIR = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
 
 def test_download_attachments(preloaded_client_with_attachments):
     job = Job.query.all()[0]
-    url = "/execution/%s/attachments/%s" % (job.id, job.attachments_token)
+    url = "/execution/%s/attachments/%s/%s" % (job.id,
+                                               job.attachments_token,
+                                               "some_container_id")
     rv = preloaded_client_with_attachments.get(url)
     assert rv.status_code == 200
     expected_files = ["test1.txt", "test2.txt"]
@@ -25,7 +27,7 @@ def test_download_attachments(preloaded_client_with_attachments):
     rv = preloaded_client_with_attachments.get(url)
     assert rv.status_code == 404
 
-    url = "/execution/%s/attachments/%s" % (999, job.attachments_token)
+    url = "/execution/%s/attachments/%s/1" % (999, job.attachments_token)
     rv = preloaded_client_with_attachments.get(url)
     data = json.loads(rv.data.decode('utf-8'))
     assert data.get('error', None)
@@ -35,7 +37,7 @@ def test_download_attachments(preloaded_client_with_attachments):
     job.attachments_path = os.path.join(job.attachments_path, "does_not_exist")
     db.session.add(job)
     db.session.commit()
-    url = "/execution/%s/attachments/%s" % (job.id, job.attachments_token)
+    url = "/execution/%s/attachments/%s/1" % (job.id, job.attachments_token)
     rv = preloaded_client_with_attachments.get(url)
     assert "Something went wrong, contact your admin" in rv.data.decode('utf-8')
 

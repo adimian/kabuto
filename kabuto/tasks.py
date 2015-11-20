@@ -1,12 +1,15 @@
 import shutil
 import os
-from io import BytesIO
 from hgapi import hg_clone
 from hgapi.hgapi import HgException
 import docker
 from utils import make_app, get_working_dir
+from connection import BaseHandler
 from celery import Celery
 import json
+import logging
+
+logger = logging.getLogger("kabuto")
 
 
 def make_celery(config=None):
@@ -35,14 +38,6 @@ def get_docker_client():
                      app.config['DOCKER_PASSWORD'],
                      registry=app.config['DOCKER_REGISTRY'])
     return client
-
-
-class BuildResult(object):
-    def __init__(self, name=None, content=None, error=None, output=None):
-        self.name = name
-        self.content = content
-        self.error = error
-        self.output = output
 
 
 @celery.task(name='tasks.build_and_push')
@@ -91,3 +86,16 @@ def build_and_push(args):
 
     return {"name": args["name"], "content": args["content"],
             "error": error, "output": output, "tag": tag}
+
+
+class LogHandler(BaseHandler):
+    def call(self, recipe):
+        print("calling")
+        job_id = recipe['job_id']
+        lines = recipe['log_lines']
+        job_path = os.path.join(app.config['JOB_LOGS_DIR'],
+                                "job_%s.log" % job_id)
+        print(job_path)
+        with open(job_path, "ab") as fh:
+            for line in lines:
+                fh.write(bytes(line, 'utf-8'))

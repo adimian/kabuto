@@ -215,3 +215,54 @@ def test_download_result(authenticated_client):
     data = json.loads(rv.data.decode('utf-8'))
     assert data.get('error', None)
     assert data['error'] == "Job not found"
+
+
+def test_delete_job(authenticated_client):
+    pipeline = Pipeline.query.all()[0]
+    image = Image.query.all()[0]
+    with app.app_context():
+        job = Job(pipeline, image, "", "")
+        db.session.add(job)
+        job.state = 'in_queue'
+        db.session.commit()
+        job_id = job.id
+    result_url = '/pipeline/%s/job/%s' % (job.pipeline_id, job.id)
+    rv = authenticated_client.delete(result_url)
+    result = json.loads(rv.data.decode('utf-8'))
+    assert result.get('error') == 'Cannot delete jobs in queue, try again later'
+    assert rv.status_code == 200
+
+    job.state = 'running'
+    db.session.add(job)
+    db.session.commit()
+    rv = authenticated_client.delete(result_url)
+    result = json.loads(rv.data.decode('utf-8'))
+    assert result.get('error') == "Job didn't update properly, try again later"
+
+    job.container_id = '1'
+    db.session.add(job)
+    db.session.commit()
+    with patch('kabuto.connection.Sender.broadcast'):
+        rv = authenticated_client.delete(result_url)
+
+    job = Job.query.filter_by(id=job_id).all()
+    assert not job
+
+
+def test_kill_job(authenticated_client):
+    pipeline = Pipeline.query.all()[0]
+    image = Image.query.all()[0]
+    with app.app_context():
+        job = Job(pipeline, image, "", "")
+        db.session.add(job)
+        job.state = 'running'
+        job.container_id = '1'
+        db.session.commit()
+        job_id = job.id
+    result_url = '/pipeline/%s/job/%s/kill' % (job.pipeline_id, job.id)
+    with patch('kabuto.connection.Sender.broadcast'):
+        rv = authenticated_client.get(result_url)
+    assert rv.status_code == 200
+    result = json.loads(rv.data.decode('utf-8'))
+    print(result)
+    assert result.get('message') == "Success"

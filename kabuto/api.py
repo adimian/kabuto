@@ -5,6 +5,7 @@ import os
 import uuid
 import zipfile
 
+from io import BytesIO
 from flask import abort, send_file, request
 from flask_login import (login_required, login_user,
                          current_user)
@@ -17,19 +18,16 @@ import flask_restful as restful
 from flask_ldap3_login import AuthenticationResponseStatus as ars
 import time
 
-from mailer import send_token
-from utils import publish_job, make_app, get_working_dir
-from tasks import build_and_push, get_docker_client
-
+from utils import make_app, get_working_dir, logger
+from tasks import build_and_push, get_docker_client, LogHandler
+from connection import Receiver, Sender
 
 app, api, login_manager, ldap_manager, db, bcrypt = make_app()
+SENDER = Sender('jobs', app.config)
 
 
 class ProtectedResource(restful.Resource):
     method_decorators = [login_required]
-
-logger = logging.getLogger(__name__)
-logger.level = logging.DEBUG
 
 DATE_FORMAT = "%Y-%m-%d"
 
@@ -147,6 +145,7 @@ class Job(db.Model):
     results_path = db.Column(db.String(128))
 
     sequence_number = db.Column(db.Integer)
+    container_id = db.Column(db.String(128))
 
     def __init__(self, pipeline, image, attachments, command, sequence=None):
         self.pipeline = pipeline
@@ -185,22 +184,6 @@ class Job(db.Model):
     @property
     def owner(self):
         return self.pipeline.owner
-
-
-class ExecutionLog(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
-    job = db.relationship('Job', backref=db.backref('logs', lazy='dynamic'))
-    logline = db.Column(db.Text)
-
-    def __init__(self, job, line):
-        self.job = job
-        self.logline = line
-
-    def as_dict(self):
-        return {"id": self.id,
-                "job": self.job_id,
-                "logline": self.logline}
 
 
 @login_manager.user_loader
@@ -505,7 +488,7 @@ class Jobs(ProtectedResource):
         job = get_entities([Job, Pipeline], [job_id, pipeline_id])
         if not job:
             return {'error': ('You either don\'t have the rights to update '
-                              'this image, or it does not exist')}
+                              'this job, or it does not exist')}
         job = job[0]
         parser = reqparse.RequestParser()
         parser.add_argument('image_id', type=str)
@@ -538,6 +521,41 @@ class Jobs(ProtectedResource):
 
         return {'id': job.id}
 
+    def delete(self, pipeline_id, job_id):
+        job = get_entities([Job, Pipeline], [job_id, pipeline_id])
+        if not job:
+            return {'error': ('You either don\'t have the rights to delete '
+                              'this job, or it does not exist')}
+        job = job[0]
+
+        if job.state == 'in_queue':
+            return {"error": "Cannot delete jobs in queue, try again later"}
+        if job.state == 'running':
+            if job.container_id:
+                SENDER.broadcast(job.container_id, 'kill')
+            else:
+                return {'error': "Job didn't update properly, try again later"}
+        db.session.delete(job)
+        db.session.commit()
+        return {'message': 'Successfully deleted job'}
+
+
+class KillJob(ProtectedResource):
+    def get(self, pipeline_id, job_id):
+        job = get_entities([Job, Pipeline], [job_id, pipeline_id])
+        if not job:
+            return {'error': ('You either don\'t have the rights to update '
+                              'this job, or it does not exist')}
+        job = job[0]
+        if job.state == 'running':
+            if job.container_id:
+                SENDER.broadcast(job.container_id, 'kill')
+            else:
+                return {'error': "Job didn't update properly, try again later"}
+        else:
+            return {'error': 'Cannot kill a job that is not running'}
+        return {'message': 'Success'}
+
 
 class Submitter(ProtectedResource):
     def post(self, pipeline_id):
@@ -549,7 +567,7 @@ class Submitter(ProtectedResource):
         jobs = []
         for job in pipeline.jobs:
             jobs.append(job)
-            publish_job(job.serialize(), app.config)
+            SENDER.send(job.serialize())
             job.state = "in_queue"
             db.session.add(job)
             db.session.commit()
@@ -557,38 +575,53 @@ class Submitter(ProtectedResource):
         return dict([(jb.id, jb.state) for jb in jobs])
 
 
-class LogDeposit(restful.Resource):
-    def post(self, job_id, token):
+class LogWithdrawal(ProtectedResource):
+    def get(self, job_id):
         try:
-            job = Job.query.filter_by(id=job_id).one()
+            log_path = self.get_log_path(job_id)
         except NoResultFound:
             return {"error": "Job not found"}
 
-        if not job or not job.results_token == token:
-            msg = "Unauthorized log deposit from %s with token: %s"
-            logging.info(msg % (get_remote_ip(), token))
-            abort(404)
+        return {"filename": "job_%s_logs.txt" % job_id,
+                "size": os.path.getsize(log_path)}
 
+    def post(self, job_id):
         parser = reqparse.RequestParser()
-        parser.add_argument('log_line')
+        parser.add_argument('start_byte', type=int)
+        parser.add_argument('size', type=int)
         args = parser.parse_args()
 
-        lines = json.loads(args['log_line'])
-        for line in lines:
-            db.session.add(ExecutionLog(job, line))
-        db.session.commit()
+        start_byte = args['start_byte']
+        size = args['size']
 
+        try:
+            log_path = self.get_log_path(job_id)
+        except NoResultFound:
+            return {"error": "Job not found"}
 
-class LogWithdrawal(ProtectedResource):
-    def get(self, job_id, last_id=None):
-        logs = ExecutionLog.query.filter_by(job_id=job_id)
-        if last_id:
-            logs = logs.filter(ExecutionLog.id > last_id).all()
-        return [log.as_dict() for log in logs]
+        with open(log_path, "rb") as fh:
+            try:
+                if start_byte:
+                    fh.seek(start_byte)
+                if size:
+                    result = fh.read(size)
+                else:
+                    result = fh.read()
+            except Exception as e:
+                return {"error": "Could not read log file %s" % e}
+
+        return send_file(BytesIO(result), as_attachment=True,
+                         attachment_filename="job_%s_logs.txt" % job_id)
+
+    def get_log_path(self, job_id):
+        job = Job.query.filter_by(id=job_id).one()
+        log_path = os.path.join(app.config['JOB_LOGS_DIR'],
+                                "job_%s.log" % job.id)
+        return log_path
 
 
 class Attachment(restful.Resource):
-    def get(self, job_id, token):
+    def get(self, job_id, token, container_id):
         try:
             job = Job.query.filter_by(id=job_id).one()
         except NoResultFound:
@@ -603,6 +636,7 @@ class Attachment(restful.Resource):
             # We'll assume that the job started running
             # when the attachments are downloaded
             job.state = "running"
+            job.container_id = container_id
             db.session.add(job)
             db.session.commit()
             return send_file(zip_file,
@@ -713,16 +747,15 @@ api.add_resource(Jobs,
                  '/jobs',
                  '/pipeline/<string:pipeline_id>/job',
                  '/pipeline/<string:pipeline_id>/job/<string:job_id>')
+api.add_resource(KillJob,
+                 '/pipeline/<string:pipeline_id>/job/<string:job_id>/kill')
 api.add_resource(Submitter,
                  '/pipeline/<string:pipeline_id>/submit')
 api.add_resource(Attachment,
-                 '/execution/<string:job_id>/attachments/<string:token>',
+                 '/execution/<string:job_id>/attachments/<string:token>/<string:container_id>',
                  '/execution/<string:job_id>/results/<string:token>')
-api.add_resource(LogDeposit,
-                 '/execution/<string:job_id>/log/<string:token>')
 api.add_resource(LogWithdrawal,
-                 '/execution/<string:job_id>/logs',
-                 '/execution/<string:job_id>/logs/<string:last_id>')
+                 '/execution/<string:job_id>/logs')
 
 
 def init_db():
@@ -747,10 +780,9 @@ def init_db():
         raise error
 
 
+init_db()
+receiver = Receiver('logs', app.config)
+receiver.threaded_listen(LogHandler())
 if __name__ == '__main__':
-    init_db()
     app.run(host=app.config['HOST'],
             port=app.config['PORT'])
-else:
-    # for gunicorn
-    init_db()

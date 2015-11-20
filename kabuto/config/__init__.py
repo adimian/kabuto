@@ -10,6 +10,7 @@ class Config(object):
     AMQP_USER = 'kabuto'
     AMQP_PASSWORD = 'kabuto'
     KABUTO_WORKING_DIR = ''
+    JOB_LOGS_DIR = '/tmp'
     CELERY_BROKER_URL = 'amqp://%s:%s@%s:5672/celery' % (AMQP_USER,
                                                          AMQP_PASSWORD,
                                                          AMQP_HOSTNAME)

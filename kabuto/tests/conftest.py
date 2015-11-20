@@ -16,7 +16,7 @@ class MockClient(object):
         pass
 
     def build(self, *args, **kwargs):
-        return ["Successfully built"]
+        return [b'"Successfully built"']
 
     def push(self, *args, **kwargs):
         pass
@@ -125,9 +125,12 @@ def preload(client, data):
     return image_id, pipeline_id, job_id
 
 
-def poll_for_image_id(client, build_id):
+def poll_for_image_id(client, build_id, image_id=None):
     def wait_for_image():
-        rv = client.get('image/build/%s' % build_id)
+        end = build_id
+        if image_id:
+            end = "%s/%s" % (build_id, image_id)
+        rv = client.get('image/build/%s' % end)
         build_data = json.loads(rv.data.decode('utf-8'))
         return build_data
 

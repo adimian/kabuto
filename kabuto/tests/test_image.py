@@ -85,28 +85,58 @@ def test_create_image_with_attachments(authenticated_client):
                                              'attachments': attachments})
 
 
+class MockResult(object):
+    def __init__(self, result):
+        self.result = result
+
+    @property
+    def id(self):
+        return "some_id"
+
+    @property
+    def state(self):
+        return "SUCCESS"
+
+    def get(self):
+        return self.result
+
+
+def mock_async_result1(build_id):
+    return MockResult({"name": "some_name", "content": sample_dockerfile,
+                       "error": "", "output": "", "tag": "some_tag"})
+
+
+def mock_async_result2(build_id):
+    return MockResult({"name": "some_new_name", "content": sample_dockerfile,
+                       "error": "", "output": "", "tag": "some_tag"})
+
+
 @patch('docker.Client', MockClient)
-@patch('tasks.build_and_push.AsyncResult', mock_async_result)
 def test_update_image(authenticated_client):
-    rv = authenticated_client.post('/image',
-                                   data={'dockerfile': update_file,
-                                         'name': 'some_name'})
-    assert rv.status_code == 200
-    build_id = json.loads(rv.data.decode('utf-8'))['build_id']
-    build_data = poll_for_image_id(authenticated_client, build_id)
+    with patch('tasks.build_and_push.AsyncResult', mock_async_result1):
+        rv = authenticated_client.post('/image',
+                                       data={'dockerfile': update_file,
+                                             'name': 'some_name'})
+        assert rv.status_code == 200
+        build_id = json.loads(rv.data.decode('utf-8'))['build_id']
+        build_data = poll_for_image_id(authenticated_client, build_id)
     image_id = build_data['id']
 
-    new_name = 'hellozeworld'
-    rv = authenticated_client.put('/image/%s' % image_id,
-                                  data={'dockerfile': sample_dockerfile,
-                                        'name': new_name})
+    new_name = 'some_new_name'
+    with patch('tasks.build_and_push.AsyncResult', mock_async_result2):
+        rv = authenticated_client.put('/image/%s' % image_id,
+                                      data={'dockerfile': sample_dockerfile,
+                                            'name': new_name})
+        build_data = poll_for_image_id(authenticated_client,
+                                       build_id, image_id)
     img = Image.query.filter_by(id=image_id).first()
     assert img.name == new_name
     assert img.dockerfile == sample_dockerfile
 
-    rv = authenticated_client.put('/image/999',
-                                  data={'dockerfile': sample_dockerfile,
-                                        'name': new_name})
+    with patch('tasks.build_and_push.AsyncResult', mock_async_result):
+        rv = authenticated_client.put('/image/999',
+                                      data={'dockerfile': sample_dockerfile,
+                                            'name': new_name})
     data = json.loads(rv.data.decode('utf-8'))
     assert data.get('error', None)
 
@@ -165,3 +195,4 @@ def test_get_details(client):
     assert images.get(id2)
     assert sorted(images[id2].keys()) == sorted(["id", "name", "creation_date",
                                                  "dockerfile"])
+
