@@ -1,26 +1,22 @@
-import requests
+from requests import Session
 import time
 
 base_url = "http://localhost:5000"
 dockerfile = '''FROM phusion/baseimage:0.9.16
 CMD ["echo", "hello world"]
 '''
+s = Session()
+r = s.post('%s/login' % base_url, data={'login': 'me',
+                                        'password': 'SecreT'})
 
-r = requests.post('%s/login' % base_url, data={'login': 'me',
-                                               'password': 'SecreT'})
-c = r.cookies
-
-r = requests.post('%s/image' % base_url,
-                  data={'dockerfile': dockerfile,
-                        'name': "test"},
-                  cookies=c)
+r = s.post('%s/image' % base_url,
+           data={'dockerfile': dockerfile,
+                 'name': "test"})
 build_id = r.json()['build_id']
 
 
 def wait_for_image():
-    global c
-    r = requests.get('%s/image/build/%s' % (base_url, build_id),
-                     cookies=c)
+    r = s.get('%s/image/build/%s' % (base_url, build_id))
     build_data = r.json()
     return build_data
 
@@ -37,30 +33,24 @@ image_id = build_data['id']
 print(build_data['output'])
 print("created image")
 
-r = requests.post('%s/pipeline' % base_url,
-                  data={'name': 'my first pipeline'},
-                  cookies=c)
+r = s.post('%s/pipeline' % base_url, data={'name': 'my first pipeline'})
 pipeline_id = r.json()['id']
 print("created pipeline")
 print(pipeline_id)
 
 data = {'command': ['ls -al']}
 data['image_id'] = image_id
-r = requests.post('%s/pipeline/%s/job' % (base_url, pipeline_id),
-                  data=data,
-                  cookies=c)
+r = s.post('%s/pipeline/%s/job' % (base_url, pipeline_id), data=data)
 
 job_id = r.json()['id']
 print("created job")
 
-r = requests.post('%s/pipeline/%s/submit' % (base_url, pipeline_id),
-                  cookies=c)
+r = s.post('%s/pipeline/%s/submit' % (base_url, pipeline_id))
 print("submitted job with following executions:")
 for eid, state in r.json().items():
     print("id: %s - state(%s)" % (eid, state))
 
-r = requests.get('%s/execution/%s/logs' % (base_url, job_id),
-                 cookies=c)
+r = s.get('%s/execution/%s/logs' % (base_url, job_id))
 print("Initial logs")
 last_log_line = -1
 for line in r.json():
@@ -69,7 +59,7 @@ for line in r.json():
 
 def poll_for_state():
     url = "%s/pipeline/%s/job/%s" % (base_url, pipeline_id, job_id)
-    r = requests.get(url, cookies=c)
+    r = s.get(url)
     return r.json()[str(job_id)]["state"]
 
 state = poll_for_state()
@@ -79,9 +69,9 @@ while not state == "done":
     state = poll_for_state()
     time.sleep(1)
 
-r = requests.get('%s/execution/%s/logs/%s' % (base_url,
-                                              job_id,
-                                              0),
+r = s.get('%s/execution/%s/logs/%s' % (base_url,
+                                       job_id,
+                                       0),
                  cookies=c)
 print("Follow up logs")
 for line in r.json():
