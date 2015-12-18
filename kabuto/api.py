@@ -250,6 +250,8 @@ class Login(restful.Resource):
             if ars.success == response.status:
                 if not user:
                     user = User(args['login'], None, None)
+                    db.session.add(user)
+                    db.session.commit()
                 can_login = True
         elif user:
             if user.is_correct_password(args['password']):
@@ -532,7 +534,8 @@ class Jobs(ProtectedResource):
             return {"error": "Cannot delete jobs in queue, try again later"}
         if job.state == 'running':
             if job.container_id:
-                SENDER.broadcast(job.container_id, 'kill')
+                data = {"container_id": job.container_id}
+                SENDER.broadcast(data, 'kill')
             else:
                 return {'error': "Job didn't update properly, try again later"}
         db.session.delete(job)
@@ -549,8 +552,8 @@ class KillJob(ProtectedResource):
         job = job[0]
         if job.state == 'running':
             if job.container_id:
-                print(SENDER)
-                SENDER.broadcast(job.container_id, 'kill')
+                data = {"container_id": job.container_id}
+                SENDER.broadcast(data, 'kill')
             else:
                 return {'error': "Job didn't update properly, try again later"}
         else:
