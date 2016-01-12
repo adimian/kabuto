@@ -90,12 +90,10 @@ def build_and_push(args):
 
 class LogHandler(BaseHandler):
     def call(self, recipe):
-        print("calling")
         job_id = recipe['job_id']
         lines = recipe['log_lines']
         job_path = os.path.join(app.config['JOB_LOGS_DIR'],
                                 "job_%s.log" % job_id)
-        print(job_path)
         with open(job_path, "ab") as fh:
             for line in lines:
                 fh.write(bytes(line, 'utf-8'))

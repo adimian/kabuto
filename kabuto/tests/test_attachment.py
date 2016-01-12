@@ -50,7 +50,7 @@ def test_upload_attachments(preloaded_client_with_attachments):
                              'rb'),
                         'results.zip'),
             "state": "done",
-            "response": "done",
+            "response": '0',
             "cpu": '0',
             "memory": '0',
             "io": '0',

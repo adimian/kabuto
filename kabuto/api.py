@@ -135,6 +135,7 @@ class Job(db.Model):
     command = db.Column(db.Text)
     state = db.Column(db.String(32), default='ready')
     creation_date = db.Column(db.DateTime, default=datetime.datetime.utcnow())
+    response = db.Column(db.Integer)
     used_cpu = db.Column(db.Float(precision=2), default=0.)
     used_memory = db.Column(db.Float(precision=2), default=0.)
     used_io = db.Column(db.Float(precision=2), default=0.)
@@ -173,6 +174,7 @@ class Job(db.Model):
                 "command": self.command,
                 "state": self.state,
                 "creation_date": self.creation_date.strftime(DATE_FORMAT),
+                "response": self.response,
                 "used_cpu": self.used_cpu,
                 "used_memory": self.used_memory,
                 "used_io": self.used_io,
@@ -681,6 +683,7 @@ class Attachment(restful.Resource):
                 os.remove(zip_dir)
 
         job.state = args['state']
+        job.response = int(args['response'])
         job.used_cpu = args['cpu']
         job.used_memory = args['memory']
         job.used_io = args['io']

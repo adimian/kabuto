@@ -3,6 +3,7 @@ import time
 
 base_url = "http://localhost:5000"
 dockerfile = '''FROM phusion/baseimage:0.9.16
+RUN apt-get install python3
 CMD ["echo", "hello world"]
 '''
 s = Session()
