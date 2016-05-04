@@ -588,8 +588,12 @@ class LogWithdrawal(ProtectedResource):
         except NoResultFound:
             return {"error": "Job not found"}
 
+        if not os.path.exists(log_path):
+            size = 0
+        else:
+            size = os.path.getsize(log_path)
         return {"filename": "job_%s_logs.txt" % job_id,
-                "size": os.path.getsize(log_path)}
+                "size": size}
 
     def post(self, job_id):
         parser = reqparse.RequestParser()
@@ -605,16 +609,19 @@ class LogWithdrawal(ProtectedResource):
         except NoResultFound:
             return {"error": "Job not found"}
 
-        with open(log_path, "rb") as fh:
-            try:
-                if start_byte:
-                    fh.seek(start_byte)
-                if size:
-                    result = fh.read(size)
-                else:
-                    result = fh.read()
-            except Exception as e:
-                return {"error": "Could not read log file %s" % e}
+        if os.path.exists(log_path):
+            with open(log_path, "rb") as fh:
+                try:
+                    if start_byte:
+                        fh.seek(start_byte)
+                    if size:
+                        result = fh.read(size)
+                    else:
+                        result = fh.read()
+                except Exception as e:
+                    return {"error": "Could not read log file %s" % e}
+        else:
+            result = ""
 
         return send_file(BytesIO(result), as_attachment=True,
                          attachment_filename="job_%s_logs.txt" % job_id)
