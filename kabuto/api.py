@@ -621,7 +621,7 @@ class LogWithdrawal(ProtectedResource):
                 except Exception as e:
                     return {"error": "Could not read log file %s" % e}
         else:
-            result = ""
+            result = b""
 
         return send_file(BytesIO(result), as_attachment=True,
                          attachment_filename="job_%s_logs.txt" % job_id)
