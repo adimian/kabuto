@@ -22,6 +22,7 @@ class Config(object):
     DOCKER_REGISTRY_INSECURE = True
     DOCKER_LOGIN = ""
     DOCKER_PASSWORD = ""
+    DOCKER_API_VERSION = "1.17"
     # python -m smtpd -c DebuggingServer -n localhost:2525
     SMTP_SERVER = 'localhost'
     SMTP_PORT = 2525

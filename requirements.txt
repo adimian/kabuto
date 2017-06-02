@@ -1,5 +1,5 @@
 bcrypt==1.1.1
-docker-py==1.1.0
+docker-py==1.10.6
 Flask==0.10.1
 Flask-Bcrypt==0.6.2
 Flask-Login==0.2.11

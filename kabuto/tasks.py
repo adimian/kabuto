@@ -32,7 +32,8 @@ celery, app = make_celery()
 
 
 def get_docker_client():
-    client = docker.Client(base_url=app.config['DOCKER_CLIENT'])
+    client = docker.Client(base_url=app.config['DOCKER_CLIENT'],
+                           version=app.config['DOCKER_API_VERSION'])
     if app.config['DOCKER_LOGIN']:
         client.login(app.config['DOCKER_LOGIN'],
                      app.config['DOCKER_PASSWORD'],
